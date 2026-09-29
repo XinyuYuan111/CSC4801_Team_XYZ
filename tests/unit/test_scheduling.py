@@ -116,6 +116,15 @@ def test_fp_sched_1_invalid_slots(app, world):
         # Booked slots are never shown as available.
         assert all(s["slot_id"] != slot_id for s in scheduling_service.list_available_slots(ana))
 
+        # DB-level backstop: ON DELETE RESTRICT refuses the raw delete of a
+        # booked slot, so the booking can never be cascade-removed (P6).
+        with pytest.raises(sqlite3.IntegrityError):
+            with transaction():
+                get_db().execute("DELETE FROM interview_slots WHERE id = ?", (slot_id,))
+        assert get_db().execute(
+            "SELECT COUNT(*) AS n FROM bookings WHERE slot_id = ?", (slot_id,)
+        ).fetchone()["n"] == 1
+
 
 def test_fp_sched_2_eligible_booking(app, world):
     ids = world()

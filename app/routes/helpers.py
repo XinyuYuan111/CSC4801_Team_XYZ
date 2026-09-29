@@ -7,8 +7,13 @@ from flask import g, redirect, request, session, url_for
 from app.errors import AuthenticationError, AuthorizationError
 
 
+def current_user() -> dict | None:
+    return g.get("user")
+
+
 def current_user_id():
-    return g.get("user", {}).get("id") if g.get("user") else None
+    user = g.get("user")
+    return user["id"] if user else None
 
 
 def login_required(view):

@@ -14,6 +14,10 @@ from flask import current_app, g
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 
+-- Dependent rows use ON DELETE RESTRICT (never CASCADE) so a raced or buggy
+-- delete can never silently destroy applications, slots, or bookings; the
+-- service layer reports 409 instead (FP-EMP-2, FP-SCHED-1..2).
+
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     email         TEXT NOT NULL UNIQUE,
@@ -56,7 +60,7 @@ CREATE TABLE IF NOT EXISTS job_skills (
 
 CREATE TABLE IF NOT EXISTS applications (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    job_id       INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    job_id       INTEGER NOT NULL REFERENCES jobs(id) ON DELETE RESTRICT,
     candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status       TEXT NOT NULL DEFAULT 'Pending'
                  CHECK (status IN ('Pending', 'Interviewing', 'Rejected', 'Accepted')),
@@ -66,7 +70,7 @@ CREATE TABLE IF NOT EXISTS applications (
 
 CREATE TABLE IF NOT EXISTS interview_slots (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    job_id      INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    job_id      INTEGER NOT NULL REFERENCES jobs(id) ON DELETE RESTRICT,
     employer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     start_utc   TEXT NOT NULL,
     end_utc     TEXT NOT NULL,
@@ -76,8 +80,8 @@ CREATE TABLE IF NOT EXISTS interview_slots (
 
 CREATE TABLE IF NOT EXISTS bookings (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    slot_id        INTEGER NOT NULL UNIQUE REFERENCES interview_slots(id) ON DELETE CASCADE,
-    application_id INTEGER NOT NULL UNIQUE REFERENCES applications(id) ON DELETE CASCADE,
+    slot_id        INTEGER NOT NULL UNIQUE REFERENCES interview_slots(id) ON DELETE RESTRICT,
+    application_id INTEGER NOT NULL UNIQUE REFERENCES applications(id) ON DELETE RESTRICT,
     created_at     TEXT NOT NULL
 );
 """

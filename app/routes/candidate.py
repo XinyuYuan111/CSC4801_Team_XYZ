@@ -3,7 +3,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.errors import ValidationError
-from app.routes.helpers import current_user_id, role_required
+from app.routes.helpers import current_user, current_user_id, login_required, role_required
 from app.services import applications as applications_service
 from app.services import jobs as jobs_service
 from app.services import profiles as profiles_service
@@ -69,12 +69,24 @@ def applications():
 
 
 @bp.route("/applications/<int:application_id>")
-@role_required("Candidate")
+@login_required
 def application_detail(application_id: int):
-    detail = applications_service.get_application_for_candidate(current_user_id(), application_id)
-    slots = []
-    if detail["status"] == "Interviewing" and detail["booking"] is None:
-        slots = scheduling_service.list_available_slots(detail["employer_id"])
+    """Application detail for its owning candidate and the owning employer.
+
+    Candidates see the booking UI when eligible; employers get the same detail
+    read-only (SPEC.md route table). Any other caller receives 403; a missing
+    application the caller would otherwise see receives 404.
+    """
+    user = current_user()
+    if user["role"] == "Candidate":
+        detail = applications_service.get_application_for_candidate(user["id"], application_id)
+        can_book = detail["status"] == "Interviewing" and detail["booking"] is None
+        slots = scheduling_service.list_available_slots(detail["employer_id"]) if can_book else []
+        return render_template(
+            "candidate/application_detail.html",
+            application=detail, slots=slots, can_book=can_book,
+        )
+    detail = applications_service.get_application_for_employer(user["id"], application_id)
     return render_template(
-        "candidate/application_detail.html", application=detail, slots=slots
+        "candidate/application_detail.html", application=detail, slots=[], can_book=False
     )

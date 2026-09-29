@@ -65,6 +65,9 @@ def new_job():
 @bp.route("/jobs/<int:job_id>/edit", methods=("GET", "POST"))
 @role_required("Employer")
 def edit_job(job_id: int):
+    # Ownership is enforced before any content is loaded or rendered (FP-EMP-2):
+    # a foreign employer gets 403 on the GET form as well as the POST.
+    jobs_service.get_owned_job(current_user_id(), job_id)
     if request.method == "POST":
         try:
             jobs_service.update_job(
@@ -77,13 +80,15 @@ def edit_job(job_id: int):
         except ValidationError as exc:
             return render_template(
                 "employer/job_form.html",
-                job=jobs_service.get_job(job_id),
+                job=jobs_service.get_owned_job(current_user_id(), job_id),
                 error=exc.message,
             ), exc.status
         flash("Job updated.", "success")
         return redirect(url_for("employer.jobs"))
     return render_template(
-        "employer/job_form.html", job=jobs_service.get_job(job_id), error=None
+        "employer/job_form.html",
+        job=jobs_service.get_owned_job(current_user_id(), job_id),
+        error=None,
     )
 
 
@@ -98,7 +103,7 @@ def delete_job(job_id: int):
 @bp.route("/jobs/<int:job_id>/applicants")
 @role_required("Employer")
 def applicants(job_id: int):
-    job = jobs_service.get_job(job_id)  # 404 / ownership checked when listing below
+    job = jobs_service.get_owned_job(current_user_id(), job_id)  # 404 / 403 first
     rows = applications_service.list_applicants(current_user_id(), job_id)
     return render_template("employer/applicants.html", job=job, applicants=rows)
 

@@ -52,13 +52,17 @@ Schema DDL: `app/db.py` (`SCHEMA`). All timestamps are UTC ISO-8601
 | `company_profiles` | `user_id`, `company_name`, `description` | 1:1 `users.id` (employer) |
 | `jobs` | `id`, `employer_id`, `title`, `description`, `created_at` | N:1 `users.id` (employer owner) |
 | `job_skills` | `job_id`, `skill` | PK `(job_id, skill)` → 1:N required skills per job (may be empty) |
-| `applications` | `id`, `job_id`, `candidate_id`, `status`, `created_at` | `UNIQUE (job_id, candidate_id)` enforces apply-once; `status IN ('Pending','Interviewing','Rejected','Accepted')` |
-| `interview_slots` | `id`, `job_id`, `employer_id`, `start_utc`, `end_utc`, `created_at` | N:1 `jobs.id`; `employer_id` is the slot owner (must equal the job's employer at creation); `CHECK (end_utc > start_utc)` |
-| `bookings` | `id`, `slot_id`, `application_id`, `created_at` | `UNIQUE (slot_id)` one booking per slot; `UNIQUE (application_id)` one booking per application — the FP-SCHED-3 DB backstop |
+| `applications` | `id`, `job_id`, `candidate_id`, `status`, `created_at` | `UNIQUE (job_id, candidate_id)` enforces apply-once (the constraint itself is the race-safe duplicate detector → 409); `status IN ('Pending','Interviewing','Rejected','Accepted')`; `job_id` FK is `ON DELETE RESTRICT` |
+| `interview_slots` | `id`, `job_id`, `employer_id`, `start_utc`, `end_utc`, `created_at` | N:1 `jobs.id` (`ON DELETE RESTRICT`); `employer_id` is the slot owner (must equal the job's employer at creation); `CHECK (end_utc > start_utc)` |
+| `bookings` | `id`, `slot_id`, `application_id`, `created_at` | `UNIQUE (slot_id)` one booking per slot; `UNIQUE (application_id)` one booking per application — the FP-SCHED-3 DB backstop; both FKs `ON DELETE RESTRICT` |
 
 Deletion rules: a job may be deleted only when it has **no applications and no
 interview slots** (FP-EMP-2); otherwise `409` and nothing changes. Slots are
-deletable only while unbooked (FP-SCHED-1). A booking row survives status
+deletable only while unbooked (FP-SCHED-1). Both delete paths run their
+dependent-check and the `DELETE` inside one `BEGIN IMMEDIATE` transaction, and
+every dependent FK is `ON DELETE RESTRICT` (never `CASCADE`), so a raced or
+buggy delete can never silently destroy applications, slots, or bookings —
+SQLite refuses and the service maps that to `409`. A booking row survives status
 changes on its application and keeps the slot unavailable (FP-SCHED-2).
 
 ## Authentication and Authorization
@@ -92,11 +96,12 @@ observable contract:
 Ownership map: resumes are readable/replaceable only by their owning candidate
 (any other candidate or employer gets `403` on direct URL); applications are
 visible to their candidate and to the employer owning the job, and only that
-employer may set status; jobs and their applicant lists are managed only by the
-employer who owns the posting; slots are owned by the creating employer (tied to
-one of their jobs); bookings require the caller to own the application.
-Changing any object id in a URL or form must not bypass these checks — covered
-by `tests/unit/test_security.py`.
+employer may set status; **management reads of a job posting — including GET of
+the edit form — require ownership** (`get_owned_job` runs before any content is
+returned), while `/jobs/<id>` is the intentionally shared job-detail view;
+slots are owned by the creating employer (tied to one of their jobs); bookings
+require the caller to own the application. Changing any object id in a URL or
+form must not bypass these checks — covered by `tests/unit/test_security.py`.
 
 ## API Routes or Server Actions
 
@@ -121,7 +126,7 @@ return `405`.
 | `/candidates/<cid>/resume` | POST | Candidate owner | Replace own resume text |
 | `/applications` | GET | Candidate | Own applications with job, employer, status, booking |
 | `/applications/<id>` | GET | Candidate owner | Application detail; booking UI when `Interviewing` and unbooked (`403` other candidates) |
-| `/applications/<id>` | GET | Employer owner | Same detail (service allows the job's employer) |
+| `/applications/<id>` | GET | Employer owner | Same detail, read-only (service: `get_application_for_employer`; `403` for any other employer) |
 
 ### Jobs & booking (`app/routes/jobs.py`)
 
@@ -138,7 +143,7 @@ return `405`.
 | `/company` | GET, POST | Employer | View/edit company profile |
 | `/employer/jobs` | GET | Employer | Own job postings with applicant/slot counts |
 | `/employer/jobs/new` | GET, POST | Employer | Create posting (title + description required; skills may be empty) |
-| `/jobs/<id>/edit` | GET, POST | Employer owner | Edit own posting (`403` foreign) |
+| `/jobs/<id>/edit` | GET, POST | Employer owner | Edit own posting; ownership enforced **before** rendering on both GET and POST (`403` foreign employers, `404` missing) |
 | `/jobs/<id>/delete` | POST | Employer owner | Delete; `409` if applications or slots exist |
 | `/jobs/<id>/applicants` | GET | Employer owner | Applicants sorted by score with full rows (FP-EMP-3) |
 | `/applications/<id>/status` | POST | Employer owner | Set `Pending/Interviewing/Rejected/Accepted` |
@@ -259,11 +264,14 @@ score is the only ranking signal.
   applications and zero slots, so "current (not deleted)" jobs on the dashboard
   are exactly the rows in `jobs`.
 - **409 semantics** (documented equivalent outcomes): duplicate application —
-  `409 Application already submitted`; delete with dependents — `409 Job has
-  applications or interview slots and cannot be deleted`; booked-slot deletion —
-  `409 Cannot delete a booked slot`; booking conflicts — `409 Slot already
-  booked` (required message), other ineligible bookings use `409` with the
-  specific reason (`Application is not in Interviewing status`, `Slot is in the
-  past`, `Application already has a booking`).
+  `409 Application already submitted`, detected by the `UNIQUE (job_id,
+  candidate_id)` constraint inside the insert transaction (race-safe: a
+  concurrent duplicate maps to the same 409, never a 500); delete with
+  dependents — `409 Job has applications or interview slots and cannot be
+  deleted`; booked-slot deletion — `409 Cannot delete a booked slot`; booking
+  conflicts — `409 Slot already booked` (required message), other ineligible
+  bookings use `409` with the specific reason (`Application is not in
+  Interviewing status`, `Slot is in the past`, `Application already has a
+  booking`).
 - **No pagination** on lists (course-scale data); no PDF resume extraction
   (optional in the requirements); no LLM (see above).

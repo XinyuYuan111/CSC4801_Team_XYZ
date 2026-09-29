@@ -6,23 +6,30 @@ always in the future; everything else is constant.
 
 Demo credentials (local/demo only, never real accounts):
 
-- alice@demo.local  / DemoPass123!  Candidate "Alice Chen"  — python, sql
-- bob@demo.local    / DemoPass123!  Candidate "Bob Patel"   — python
-- cara@demo.local   / DemoPass123!  Candidate "Cara Diaz"   — rust
+- alice@demo.local  / DemoPass123!  Candidate "Alice Chen"  — Python, SQL
+- bob@demo.local    / DemoPass123!  Candidate "Bob Patel"   — Python
+- cara@demo.local   / DemoPass123!  Candidate "Cara Diaz"   — Rust
 - ana@demo.local    / DemoPass123!  Employer  "Acme Corp"
-- ben@demo.local   / DemoPass123!  Employer  "Globex Inc"
+- ben@demo.local    / DemoPass123!  Employer  "Globex Inc"
 
-The four FP-MATCH-1 examples appear as:
+Jobs (FP-DOC-3: two jobs with required skills + one empty-skill job that is the
+carrier for FP-MATCH-1 example 4):
 
-| Candidate | Job             | Skills C      | Skills R      | Score |
-|-----------|-----------------|---------------|---------------|-------|
-| Alice     | Backend Engineer| python, sql   | python, sql   | 100   |
-| Bob       | Backend Engineer| python        | python, sql   | 50    |
-| Cara      | Backend Engineer| rust          | python, sql   | 0     |
-| any       | Data Analyst    | any           | (empty)       | 100   |
+- job "Backend Engineer"  @ Acme Corp  (skills: python, sql)
+- job "Frontend Engineer" @ Globex Inc (skills: javascript)
+- job "Open Application"  @ Globex Inc (skills: empty list)
+
+The four FP-MATCH-1 examples appear literally as:
+
+| Candidate | Job              | Skills C    | Skills R    | Score |
+|-----------|------------------|-------------|-------------|-------|
+| Alice     | Backend Engineer | python, sql | python, sql | 100   |
+| Bob       | Backend Engineer | python      | python, sql | 50    |
+| Cara      | Backend Engineer | rust        | python, sql | 0     |
+| any       | Open Application | any         | (empty)     | 100   |
 
 Applications cover all four statuses, and Alice and Bob are both
-``Interviewing`` on the same job and can race for the same available slot.
+``Interviewing`` on Backend Engineer and can race for the same available slot.
 """
 
 from datetime import timedelta
@@ -60,9 +67,9 @@ def seed_demo_data() -> dict:
         "ben@demo.local", DEMO_PASSWORD, "Employer", company_name="Globex Inc"
     )
 
-    profiles_service.update_candidate_profile(
-        ids["users"]["alice"], "Alice Chen", "Python, SQL, Docker"
-    )
+    # Alice's skills are exactly "Python, SQL" so FP-MATCH-1 example 1 appears
+    # as the literal (C={python,sql}, R={python,sql}) pair in the seed data.
+    profiles_service.update_candidate_profile(ids["users"]["alice"], "Alice Chen", "Python, SQL")
     profiles_service.replace_resume(
         ids["users"]["alice"],
         ids["users"]["alice"],
@@ -90,9 +97,14 @@ def seed_demo_data() -> dict:
         "Design and build APIs in Python. SQL data modeling required.",
         "Python, SQL",
     )
-    ids["jobs"]["analyst"] = jobs_service.create_job(
-        ids["users"]["ben"], "Data Analyst",
-        "Turn product data into decisions. No specific skill list required.",
+    ids["jobs"]["frontend"] = jobs_service.create_job(
+        ids["users"]["ben"], "Frontend Engineer",
+        "Build accessible web interfaces with JavaScript.",
+        "JavaScript",
+    )
+    ids["jobs"]["open"] = jobs_service.create_job(
+        ids["users"]["ben"], "Open Application",
+        "General application with no specific skill requirements.",
         "",
     )
 
@@ -105,11 +117,11 @@ def seed_demo_data() -> dict:
     ids["applications"]["cara_backend"] = applications_service.apply_to_job(
         ids["users"]["cara"], ids["jobs"]["backend"]
     )
-    ids["applications"]["alice_analyst"] = applications_service.apply_to_job(
-        ids["users"]["alice"], ids["jobs"]["analyst"]
+    ids["applications"]["alice_frontend"] = applications_service.apply_to_job(
+        ids["users"]["alice"], ids["jobs"]["frontend"]
     )
-    ids["applications"]["bob_analyst"] = applications_service.apply_to_job(
-        ids["users"]["bob"], ids["jobs"]["analyst"]
+    ids["applications"]["bob_open"] = applications_service.apply_to_job(
+        ids["users"]["bob"], ids["jobs"]["open"]
     )
 
     # All four statuses. Alice and Bob stay Interviewing on the backend job so
@@ -117,8 +129,8 @@ def seed_demo_data() -> dict:
     applications_service.set_status(ids["users"]["ana"], ids["applications"]["alice_backend"], "Interviewing")
     applications_service.set_status(ids["users"]["ana"], ids["applications"]["bob_backend"], "Interviewing")
     applications_service.set_status(ids["users"]["ana"], ids["applications"]["cara_backend"], "Rejected")
-    applications_service.set_status(ids["users"]["ben"], ids["applications"]["alice_analyst"], "Pending")
-    applications_service.set_status(ids["users"]["ben"], ids["applications"]["bob_analyst"], "Accepted")
+    applications_service.set_status(ids["users"]["ben"], ids["applications"]["alice_frontend"], "Pending")
+    applications_service.set_status(ids["users"]["ben"], ids["applications"]["bob_open"], "Accepted")
 
     # Future slots relative to seed time (UTC). The first two belong to Acme's
     # backend job: one shared race slot plus a spare. Globex gets one slot.
@@ -134,7 +146,7 @@ def seed_demo_data() -> dict:
         ids["users"]["ana"], ids["jobs"]["backend"], start2, to_iso(base.replace(hour=16, minute=30))
     )
     ids["slots"]["globex"] = scheduling_service.create_slot(
-        ids["users"]["ben"], ids["jobs"]["analyst"], start3, to_iso(base.replace(hour=17, minute=30))
+        ids["users"]["ben"], ids["jobs"]["frontend"], start3, to_iso(base.replace(hour=17, minute=30))
     )
 
     return ids

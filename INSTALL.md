@@ -64,12 +64,13 @@ python manage.py seed
 ```
 
 This drops all tables, recreates the schema, and inserts the deterministic demo
-dataset (two employers, three candidates, two jobs with required skills
-including the four FP-MATCH-1 matching examples, applications covering all four
-statuses, and future interview slots — Alice and Bob are both `Interviewing` on
-the same job and can race for the same available slot). Slot start times are
-"tomorrow at 15:00/16:00/17:00 UTC" relative to seed time so they are always in
-the future; everything else is constant.
+dataset (two employers, three candidates, two jobs **with** required skills plus
+one empty-skill job carrying FP-MATCH-1 example 4, the four matching examples as
+literal skill pairs, applications covering all four statuses, and future
+interview slots — Alice and Bob are both `Interviewing` on the same job and can
+race for the same available slot). Slot start times are "tomorrow at
+15:00/16:00/17:00 UTC" relative to seed time so they are always in the future;
+everything else is constant.
 
 **Local/demo credentials only** (reserved `demo.local` domain — never real
 accounts):

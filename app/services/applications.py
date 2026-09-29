@@ -1,11 +1,14 @@
 """Applications: apply-once, status transitions, applicant management (FP-CAN-3, FP-EMP-3)."""
 
+import sqlite3
+
 from app.db import get_db, transaction
 from app.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from app.matching import match_score, sort_applicants_for_employer
 from app.timeutils import utc_now_iso
 
 STATUSES = ("Pending", "Interviewing", "Rejected", "Accepted")
+DUPLICATE_APPLICATION = "Application already submitted"
 
 
 def has_applied(candidate_id: int, job_id: int) -> bool:
@@ -17,23 +20,29 @@ def has_applied(candidate_id: int, job_id: int) -> bool:
 
 
 def apply_to_job(candidate_id: int, job_id: int) -> int:
-    """Apply once per job; a new application starts as Pending (FP-CAN-3)."""
+    """Apply once per job; a new application starts as Pending (FP-CAN-3).
+
+    Duplicate detection is the ``UNIQUE (job_id, candidate_id)`` constraint
+    itself (checked inside the insert transaction), so concurrent duplicate
+    submissions cannot create a second row and both observe the documented
+    ``409 Application already submitted`` outcome instead of a 500.
+    """
     db = get_db()
-    job = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    job = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
     if job is None:
         raise NotFoundError("Job not found")
-    existing = db.execute(
-        "SELECT id FROM applications WHERE job_id = ? AND candidate_id = ?",
-        (job_id, candidate_id),
-    ).fetchone()
-    if existing is not None:
-        raise ConflictError("Application already submitted")
-    with transaction():
-        cur = db.execute(
-            "INSERT INTO applications (job_id, candidate_id, status, created_at) VALUES (?, ?, 'Pending', ?)",
-            (job_id, candidate_id, utc_now_iso()),
-        )
-        return cur.lastrowid
+    try:
+        with transaction():
+            cur = db.execute(
+                "INSERT INTO applications (job_id, candidate_id, status, created_at)"
+                " VALUES (?, ?, 'Pending', ?)",
+                (job_id, candidate_id, utc_now_iso()),
+            )
+            return cur.lastrowid
+    except sqlite3.IntegrityError as exc:
+        if "UNIQUE" in str(exc):
+            raise ConflictError(DUPLICATE_APPLICATION) from exc
+        raise
 
 
 def list_my_applications(candidate_id: int) -> list[dict]:

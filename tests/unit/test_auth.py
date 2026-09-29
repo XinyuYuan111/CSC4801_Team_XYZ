@@ -88,6 +88,15 @@ def test_fp_auth_2_salted_hash_and_password_verification(client, app, db):
     assert verify_password(password_hash, "Password123!") is True
     assert verify_password(password_hash, "wrong-password") is False
 
+    # authenticate() never hands the hash to its caller (defense in depth).
+    from app.services import auth as auth_service
+
+    with app.app_context():
+        result = auth_service.authenticate("hash@example.com", "Password123!")
+        assert result is not None
+        assert set(result.keys()) == {"id", "email", "role"}
+        assert "password_hash" not in result
+
     # Failed login returns 401 and no secret material.
     client.logout()
     response = client.login("hash@example.com", "wrong-password")

@@ -117,9 +117,11 @@ def test_fp_can_3_pending_duplicate_and_application_owner(client, app, world):
         assert detail["company_name"] == "Acme Corp"
         assert detail["booking"] is None
 
-        # A duplicate application is rejected without creating another row.
-        with pytest.raises(ConflictError):
+        # A duplicate application is rejected without creating another row,
+        # with the documented conflict message (constraint-backed, race-safe).
+        with pytest.raises(ConflictError) as excinfo:
             applications_service.apply_to_job(alice, backend)
+        assert excinfo.value.message == "Application already submitted"
         assert len(applications_service.list_my_applications(alice)) == 1
 
         # A candidate cannot view another candidate's application (FP-CAN-3).
@@ -190,7 +192,10 @@ def test_fp_emp_2_job_validation_and_deletion(client, app, world):
         job = jobs_service.get_job(job_id)
         assert job["required_skills"] == []
 
-        # Another employer cannot edit, delete, or manage applicants (403).
+        # Another employer cannot edit, delete, or manage applicants (403) —
+        # including GET of the edit form, not only the POST (FP-EMP-2).
+        with pytest.raises(AuthorizationError):
+            jobs_service.get_owned_job(ben, job_id)
         with pytest.raises(AuthorizationError):
             jobs_service.update_job(ben, job_id, "Hijack", "Hijack", "")
         with pytest.raises(AuthorizationError):
@@ -211,6 +216,17 @@ def test_fp_emp_2_job_validation_and_deletion(client, app, world):
         assert jobs_service.get_job(backend)["title"] == "Backend Engineer"
         assert len(applications_service.list_applicants(ana, backend)) == 1
 
+        # DB-level backstop (P6): ON DELETE RESTRICT refuses the raw delete too,
+        # so dependents can never be silently cascade-removed.
+        import sqlite3
+
+        from app.db import get_db, transaction
+
+        with pytest.raises(sqlite3.IntegrityError):
+            with transaction():
+                get_db().execute("DELETE FROM jobs WHERE id = ?", (backend,))
+        assert jobs_service.get_job(backend)["title"] == "Backend Engineer"
+
         # A job with an interview slot (even unbooked) cannot be deleted: 409.
         fresh = jobs_service.create_job(ana, "SRE", "Reliability.", "Linux")
         start = make_future_slot_start()
@@ -229,6 +245,10 @@ def test_fp_emp_2_job_validation_and_deletion(client, app, world):
     assert client.post(
         f"/jobs/{backend}/edit", data={"title": "X", "description": "Y", "skills": ""}
     ).status_code == 403
+    # GET of the edit form is also "attempting to edit": 403, content withheld.
+    response = client.get(f"/jobs/{backend}/edit")
+    assert response.status_code == 403
+    assert b"APIs in Python." not in response.data
 
 
 def test_fp_emp_3_applicant_fields_order_status_and_role(client, app, world):
@@ -278,6 +298,14 @@ def test_fp_emp_3_applicant_fields_order_status_and_role(client, app, world):
         with pytest.raises(AuthorizationError):
             applications_service.set_status(alice, bob_app, "Accepted")
 
+        # The owning employer can open the application detail (SPEC route table);
+        # a foreign employer cannot (403) and a missing application is 404.
+        detail = applications_service.get_application_for_employer(ana, alice_app)
+        assert detail["status"] in ("Pending", "Interviewing", "Rejected", "Accepted")
+        assert detail["title"] == "Backend Engineer"
+        with pytest.raises(AuthorizationError):
+            applications_service.get_application_for_employer(ben, alice_app)
+
         # Booking appears in the applicant row for the owning employer.
         start = make_future_slot_start()
         slot_id = scheduling_service.create_slot(ana, backend, start, make_slot_end(start))
@@ -295,11 +323,16 @@ def test_fp_emp_3_applicant_fields_order_status_and_role(client, app, world):
     assert b"Alice Chen" in page.data
     assert b"python" in page.data
     assert b"Interviewing" in page.data
-    # Other employer cannot read the applicant list (403).
+    # The owning employer can read one application's detail page (P3/SPEC).
+    response = client.get(f"/applications/{alice_app}")
+    assert response.status_code == 200
+    assert b"Backend Engineer" in response.data
+    # Other employer cannot read the applicant list or the application detail (403).
     client.logout()
     client.login("ben@test.local", "Password123!")
     assert client.get(f"/jobs/{backend}/applicants").status_code == 403
-    # Candidate cannot read it either.
+    assert client.get(f"/applications/{alice_app}").status_code == 403
+    # Candidate cannot read the applicant list.
     client.logout()
     client.login("alice@test.local", "Password123!")
     assert client.get(f"/jobs/{backend}/applicants").status_code == 403

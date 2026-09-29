@@ -54,16 +54,19 @@ def register_user(email: str, password: str, role: str, display_name: str = "", 
 
 
 def authenticate(email: str, password: str):
-    """Return the user row on success, None on bad credentials.
+    """Return ``{id, email, role}`` on success, None on bad credentials.
 
     The caller cannot distinguish "unknown email" from "wrong password".
-    Password hashes are never returned to callers (FP-AUTH-2).
+    Only non-secret columns are selected, so password hashes never leave this
+    module (FP-AUTH-2).
     """
     email = (email or "").strip().lower()
-    user = get_db().execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    user = get_db().execute(
+        "SELECT id, email, role, password_hash FROM users WHERE email = ?", (email,)
+    ).fetchone()
     if user is None or not verify_password(user["password_hash"], password or ""):
         return None
-    return user
+    return {"id": user["id"], "email": user["email"], "role": user["role"]}
 
 
 def require_user(user_id) -> dict:

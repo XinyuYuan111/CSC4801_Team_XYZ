@@ -51,18 +51,26 @@ def create_slot(employer_id: int, job_id: int, start_utc: str, end_utc: str) -> 
 
 
 def delete_slot(employer_id: int, slot_id: int) -> None:
-    """Delete an unbooked slot. Booked slots cannot be deleted (FP-SCHED-1)."""
+    """Delete an unbooked slot. Booked slots cannot be deleted (FP-SCHED-1).
+
+    The booked-check and the DELETE run inside one ``BEGIN IMMEDIATE``
+    transaction; ``bookings.slot_id ON DELETE RESTRICT`` is the DB-level
+    backstop so a racing booking can never be cascade-deleted.
+    """
     db = get_db()
     slot = db.execute("SELECT * FROM interview_slots WHERE id = ?", (slot_id,)).fetchone()
     if slot is None:
         raise NotFoundError("Slot not found")
     if slot["employer_id"] != employer_id:
         raise AuthorizationError("You do not own this slot")
-    booked = db.execute("SELECT 1 FROM bookings WHERE slot_id = ?", (slot_id,)).fetchone()
-    if booked is not None:
-        raise ConflictError("Cannot delete a booked slot")
-    with transaction():
-        db.execute("DELETE FROM interview_slots WHERE id = ?", (slot_id,))
+    try:
+        with transaction(immediate=True):
+            booked = db.execute("SELECT 1 FROM bookings WHERE slot_id = ?", (slot_id,)).fetchone()
+            if booked is not None:
+                raise ConflictError("Cannot delete a booked slot")
+            db.execute("DELETE FROM interview_slots WHERE id = ?", (slot_id,))
+    except sqlite3.IntegrityError as exc:
+        raise ConflictError("Cannot delete a booked slot") from exc
 
 
 def list_slots_for_employer(employer_id: int) -> list[dict]:
@@ -148,5 +156,7 @@ def book_slot(candidate_id: int, application_id: int, slot_id: int) -> int:
         except sqlite3.IntegrityError as exc:
             # UNIQUE(slot_id) / UNIQUE(application_id): a concurrent writer won
             # the race between our check and this insert.
-            raise ConflictError(CONFLICT_BOOKED) from exc
+            if "UNIQUE" in str(exc):
+                raise ConflictError(CONFLICT_BOOKED) from exc
+            raise
         return cur.lastrowid

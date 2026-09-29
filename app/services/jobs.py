@@ -1,9 +1,13 @@
 """Job postings: CRUD, ownership rules, and deletion conflicts (FP-EMP-2, FP-CAN-2)."""
 
+import sqlite3
+
 from app.db import get_db, transaction
 from app.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from app.matching import match_score, parse_skills_text, sort_jobs_for_candidate
 from app.timeutils import utc_now_iso
+
+DELETE_CONFLICT = "Job has applications or interview slots and cannot be deleted"
 
 
 def _job_skills(db, job_id: int) -> list[str]:
@@ -40,7 +44,7 @@ def create_job(employer_id: int, title: str, description: str, skills_text: str)
 
 
 def update_job(actor_id: int, job_id: int, title: str, description: str, skills_text: str) -> dict:
-    job = _require_owned_job(actor_id, job_id)
+    job = get_owned_job(actor_id, job_id)
     title = (title or "").strip()
     description = (description or "").strip()
     if not title:
@@ -65,22 +69,29 @@ def update_job(actor_id: int, job_id: int, title: str, description: str, skills_
 def delete_job(actor_id: int, job_id: int) -> None:
     """Delete a job with no applications and no interview slots (FP-EMP-2).
 
-    Either dependent record blocks deletion with 409 Conflict and leaves the
-    job and its dependents unchanged.
+    The dependent-record check and the DELETE run inside one
+    ``BEGIN IMMEDIATE`` transaction so a concurrent apply/create_slot cannot
+    slip a dependent row into the gap. Either dependent blocks deletion with
+    409 Conflict and leaves the job and its dependents unchanged. The
+    ``ON DELETE RESTRICT`` foreign keys are the database-level backstop.
     """
-    job = _require_owned_job(actor_id, job_id)
+    get_owned_job(actor_id, job_id)
     db = get_db()
-    applications = db.execute(
-        "SELECT COUNT(*) AS n FROM applications WHERE job_id = ?", (job["id"],)
-    ).fetchone()["n"]
-    slots = db.execute(
-        "SELECT COUNT(*) AS n FROM interview_slots WHERE job_id = ?", (job["id"],)
-    ).fetchone()["n"]
-    if applications or slots:
-        raise ConflictError("Job has applications or interview slots and cannot be deleted")
-    with transaction():
-        db.execute("DELETE FROM job_skills WHERE job_id = ?", (job["id"],))
-        db.execute("DELETE FROM jobs WHERE id = ?", (job["id"],))
+    try:
+        with transaction(immediate=True):
+            applications = db.execute(
+                "SELECT COUNT(*) AS n FROM applications WHERE job_id = ?", (job_id,)
+            ).fetchone()["n"]
+            slots = db.execute(
+                "SELECT COUNT(*) AS n FROM interview_slots WHERE job_id = ?", (job_id,)
+            ).fetchone()["n"]
+            if applications or slots:
+                raise ConflictError(DELETE_CONFLICT)
+            db.execute("DELETE FROM job_skills WHERE job_id = ?", (job_id,))
+            db.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+    except sqlite3.IntegrityError as exc:
+        # RESTRICT backstop: a dependent row appeared in the same window.
+        raise ConflictError(DELETE_CONFLICT) from exc
 
 
 def get_job(job_id: int) -> dict:
@@ -101,14 +112,20 @@ def get_job(job_id: int) -> dict:
     }
 
 
-def _require_owned_job(actor_id: int, job_id: int):
+def get_owned_job(actor_id: int, job_id: int) -> dict:
+    """Load a job for management operations (edit/delete/applicants/slots).
+
+    Enforces the FP-EMP-2 / FP-AUTH-3 boundary *before* returning any content:
+    a missing job raises 404 and a foreign posting raises 403 — including for
+    reads of the edit form, not just writes.
+    """
     db = get_db()
     job = _load_job(db, job_id)
     if job is None:
         raise NotFoundError("Job not found")
     if job["employer_id"] != actor_id:
         raise AuthorizationError("You do not own this job posting")
-    return job
+    return get_job(job_id)
 
 
 def list_employer_jobs(employer_id: int) -> list[dict]:

@@ -17,7 +17,7 @@
   </div>
 </div>
 
-{% if application.status == 'Interviewing' and application.booking is none %}
+{% if can_book and application.status == 'Interviewing' and application.booking is none %}
 <h2>Book an interview slot</h2>
 <div class="card">
   {% if slots %}

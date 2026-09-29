@@ -46,6 +46,7 @@ def test_fp_sec_1_employer_cannot_modify_others_job_or_read_applicants(client, a
     # Ben attacks Ana's job object ids directly.
     client.login("ben@test.local", "Password123!")
     assert client.get(f"/jobs/{backend}/applicants").status_code == 403
+    assert client.get(f"/jobs/{backend}/edit").status_code == 403
     assert client.post(
         f"/jobs/{backend}/edit", data={"title": "Hijack", "description": "Hijack", "skills": ""}
     ).status_code == 403
