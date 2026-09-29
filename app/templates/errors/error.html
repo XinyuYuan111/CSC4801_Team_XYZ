@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Error {{ error.status }} · TalentMatch{% endblock %}
+{% block content %}
+<h1>Error {{ error.status }}</h1>
+<div class="card">
+  <p>{{ error.message }}</p>
+  <div class="actions">
+    <button class="btn secondary" type="button" onclick="history.back()">Go back</button>
+    <a class="btn" href="{{ url_for('auth.login') }}">Home</a>
+  </div>
+</div>
+{% endblock %}

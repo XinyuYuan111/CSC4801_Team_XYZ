@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Job Recommendations · TalentMatch{% endblock %}
+{% block content %}
+<h1>Job recommendations</h1>
+<p class="muted">All open postings, sorted by your match score (highest first).</p>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Match</th><th>Title</th><th>Company</th><th>Required skills</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in jobs %}
+      <tr>
+        <td class="score">{{ row.score }}</td>
+        <td>{{ row.title }}</td>
+        <td>{{ row.company_name }}</td>
+        <td>
+          {% if row.required_skills %}
+            {% for skill in row.required_skills %}<span class="pill">{{ skill }}</span>{% endfor %}
+          {% else %}
+            <span class="muted">none listed</span>
+          {% endif %}
+        </td>
+        <td><a class="btn secondary small" href="{{ url_for('jobs.detail', job_id=row.job_id) }}">View description</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No jobs posted yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Application · TalentMatch{% endblock %}
+{% block content %}
+<h1>{{ application.title }}</h1>
+<div class="card">
+  <p class="muted">Company: {{ application.company_name }}</p>
+  <p class="desc">{{ application.description }}</p>
+  <p>Status: <strong>{{ application.status }}</strong></p>
+  {% if application.booking %}
+    <p>Interview booking: <strong>{{ application.booking.start_utc | utc_display }} – {{ application.booking.end_utc | utc_display }}</strong> (UTC)</p>
+  {% else %}
+    <p class="muted">No interview booking yet.</p>
+  {% endif %}
+  <div class="actions">
+    <a class="btn secondary" href="{{ url_for('jobs.detail', job_id=application.job_id) }}">View job</a>
+    <a class="btn secondary" href="{{ url_for('candidate.applications') }}">Back to applications</a>
+  </div>
+</div>
+
+{% if application.status == 'Interviewing' and application.booking is none %}
+<h2>Book an interview slot</h2>
+<div class="card">
+  {% if slots %}
+  <p class="muted">All times are UTC. Slots are 30 minutes.</p>
+  <table>
+    <thead><tr><th>Start</th><th>End</th><th></th></tr></thead>
+    <tbody>
+      {% for slot in slots %}
+      <tr>
+        <td>{{ slot.start_utc | utc_display }}</td>
+        <td>{{ slot.end_utc | utc_display }}</td>
+        <td>
+          <form class="inline" method="post" action="{{ url_for('jobs.create_booking') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="application_id" value="{{ application.application_id }}">
+            <input type="hidden" name="slot_id" value="{{ slot.slot_id }}">
+            <button class="btn small" type="submit">Book</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No available slots right now. Check again later.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

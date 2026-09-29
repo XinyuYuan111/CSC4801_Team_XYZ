@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TalentMatch{% endblock %}</title>
+  <style>
+    :root { --ink:#1a2332; --muted:#5b6b80; --line:#d7dee8; --bg:#f4f6fa; --card:#ffffff; --accent:#2456c4; --accent-ink:#ffffff; --ok:#1d7a4c; --bad:#b3261e; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); line-height:1.5; }
+    header { background:var(--card); border-bottom:1px solid var(--line); }
+    .nav { max-width:1040px; margin:0 auto; padding:0.85rem 1.25rem; display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
+    .brand { font-weight:700; color:var(--accent); text-decoration:none; font-size:1.05rem; }
+    .nav a { color:var(--ink); text-decoration:none; }
+    .nav a:hover { color:var(--accent); }
+    .spacer { flex:1; }
+    .who { color:var(--muted); font-size:0.9rem; }
+    main { max-width:1040px; margin:1.5rem auto 3rem; padding:0 1.25rem; }
+    h1 { font-size:1.45rem; margin:0.2rem 0 1rem; }
+    h2 { font-size:1.1rem; margin:1.6rem 0 0.6rem; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:1.15rem 1.25rem; margin-bottom:1.15rem; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:0.55rem 0.6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--muted); font-size:0.82rem; text-transform:uppercase; letter-spacing:0.04em; }
+    label { display:block; font-weight:600; margin:0.75rem 0 0.25rem; }
+    input[type=text], input[type=email], input[type=password], input[type=datetime-local], select, textarea {
+      width:100%; padding:0.5rem 0.6rem; border:1px solid var(--line); border-radius:7px; font:inherit; background:#fff;
+    }
+    textarea { min-height:7.5rem; }
+    .btn { display:inline-block; border:0; border-radius:7px; padding:0.5rem 0.95rem; font:inherit; font-weight:600; cursor:pointer; background:var(--accent); color:var(--accent-ink); text-decoration:none; }
+    .btn.secondary { background:#e8edf5; color:var(--ink); }
+    .btn.danger { background:var(--bad); }
+    .btn.small { padding:0.3rem 0.7rem; font-size:0.88rem; }
+    .flash { border-radius:8px; padding:0.65rem 0.9rem; margin:0 0 1rem; }
+    .flash.success { background:#e3f5ea; color:var(--ok); border:1px solid #b7e0c8; }
+    .flash.error { background:#fdeceb; color:var(--bad); border:1px solid #f2c4c1; }
+    .error-text { color:var(--bad); margin:0.5rem 0; }
+    .muted { color:var(--muted); }
+    .pill { display:inline-block; background:#e8edf5; border-radius:999px; padding:0.12rem 0.65rem; font-size:0.85rem; margin:0.12rem 0.12rem 0.12rem 0; }
+    .score { font-weight:700; color:var(--accent); }
+    form.inline { display:inline; }
+    .actions { display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center; margin-top:0.9rem; }
+    .desc { white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+<header>
+  <nav class="nav">
+    <a class="brand" href="{{ url_for('auth.login') }}">TalentMatch</a>
+    {% if current_user %}
+      {% if current_user['role'] == 'Candidate' %}
+        <a href="{{ url_for('candidate.dashboard') }}">Jobs</a>
+        <a href="{{ url_for('candidate.applications') }}">My Applications</a>
+        <a href="{{ url_for('candidate.profile') }}">Profile</a>
+      {% else %}
+        <a href="{{ url_for('employer.jobs') }}">Job Postings</a>
+        <a href="{{ url_for('employer.slots') }}">Interview Slots</a>
+        <a href="{{ url_for('employer.company') }}">Company</a>
+      {% endif %}
+      <span class="spacer"></span>
+      <span class="who">{{ current_user['email'] }} ({{ current_user['role'] }})</span>
+      <form class="inline" method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn secondary small" type="submit">Log out</button>
+      </form>
+    {% else %}
+      <span class="spacer"></span>
+      <a href="{{ url_for('auth.login') }}">Log in</a>
+      <a href="{{ url_for('auth.register') }}">Register</a>
+    {% endif %}
+  </nav>
+</header>
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

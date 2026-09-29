@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit job' if job else 'New job' }} · TalentMatch{% endblock %}
+{% block content %}
+<h1>{{ 'Edit job posting' if job else 'Create a job posting' }}</h1>
+<div class="card">
+  {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="title">Title</label>
+    <input id="title" name="title" type="text" value="{{ job.title if job else '' }}" required>
+    <label for="description">Description</label>
+    <textarea id="description" name="description" required>{{ job.description if job else '' }}</textarea>
+    <label for="skills">Required skills (comma separated; may be empty)</label>
+    <textarea id="skills" name="skills" style="min-height:4.5rem">{{ (job.required_skills | join(', ')) if job else '' }}</textarea>
+    <div class="actions">
+      <button class="btn" type="submit">{{ 'Save changes' if job else 'Create job' }}</button>
+      <a class="btn secondary" href="{{ url_for('employer.jobs') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

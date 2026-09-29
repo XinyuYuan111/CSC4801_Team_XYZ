@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}My Resume · TalentMatch{% endblock %}
+{% block content %}
+<h1>My resume</h1>
+<div class="card">
+  <p class="muted">Raw text resume. Replacing it overwrites the previous contents. Resume text is never used in match scores.</p>
+  <form method="post" action="{{ url_for('candidate.replace_resume', candidate_id=candidate_id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="resume_text">Resume text</label>
+    <textarea id="resume_text" name="resume_text" style="min-height:16rem">{{ resume_text }}</textarea>
+    <div class="actions">
+      <button class="btn" type="submit">Replace resume</button>
+      <a class="btn secondary" href="{{ url_for('candidate.profile') }}">Back to profile</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

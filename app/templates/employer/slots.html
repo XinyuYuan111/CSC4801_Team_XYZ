@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Interview Slots · TalentMatch{% endblock %}
+{% block content %}
+<h1>Interview availability slots</h1>
+<p class="muted">All times are UTC. Each slot is exactly 30 minutes and must be in the future. Booked slots cannot be deleted and are never shown to candidates as available.</p>
+
+<div class="card">
+  <h2 style="margin-top:0">Create a slot</h2>
+  {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
+  <form method="post" action="{{ url_for('employer.create_slot') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="job_id">Job posting</label>
+    <select id="job_id" name="job_id" required>
+      {% for job in jobs %}
+      <option value="{{ job.id }}">{{ job.title }}</option>
+      {% endfor %}
+    </select>
+    <label for="start_utc">Start time (UTC, 30-minute slot)</label>
+    <input id="start_utc" name="start_utc" type="datetime-local" required>
+    <div class="actions">
+      <button class="btn" type="submit">Create slot</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">My slots</h2>
+  <table>
+    <thead>
+      <tr><th>Job</th><th>Start (UTC)</th><th>End (UTC)</th><th>State</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in slots %}
+      <tr>
+        <td>{{ row.title }}</td>
+        <td>{{ row.start_utc | utc_display }}</td>
+        <td>{{ row.end_utc | utc_display }}</td>
+        <td>
+          {% if row.booking_id %}
+            <span class="pill">booked (application #{{ row.application_id }})</span>
+          {% else %}
+            <span class="muted">available</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if not row.booking_id %}
+          <form class="inline" method="post" action="{{ url_for('employer.delete_slot', slot_id=row.slot_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn danger small" type="submit">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No slots yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

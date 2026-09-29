@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Applicants · TalentMatch{% endblock %}
+{% block content %}
+<h1>Applicants for {{ job.title }}</h1>
+<p class="muted">Sorted by match score (highest first). All times UTC.</p>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Match</th><th>Candidate</th><th>Skills</th><th>Status</th><th>Interview booking</th><th>Set status</th></tr>
+    </thead>
+    <tbody>
+      {% for row in applicants %}
+      <tr>
+        <td class="score">{{ row.score }}</td>
+        <td>{{ row.display_name }}</td>
+        <td>
+          {% if row.skills %}
+            {% for skill in row.skills %}<span class="pill">{{ skill }}</span>{% endfor %}
+          {% else %}
+            <span class="muted">none</span>
+          {% endif %}
+        </td>
+        <td>{{ row.status }}</td>
+        <td>
+          {% if row.booking %}
+            {{ row.booking.start_utc | utc_display }} – {{ row.booking.end_utc | utc_display }}
+          {% else %}
+            <span class="muted">none</span>
+          {% endif %}
+        </td>
+        <td>
+          <form class="inline" method="post" action="{{ url_for('employer.set_status', application_id=row.application_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="job_id" value="{{ job.id }}">
+            <select name="status">
+              {% for status in ['Pending', 'Interviewing', 'Rejected', 'Accepted'] %}
+              <option value="{{ status }}" {% if row.status == status %}selected{% endif %}>{{ status }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn small" type="submit">Update</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No applications yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="actions">
+    <a class="btn secondary" href="{{ url_for('employer.jobs') }}">Back to my postings</a>
+  </div>
+</div>
+{% endblock %}

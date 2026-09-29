@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}My Applications · TalentMatch{% endblock %}
+{% block content %}
+<h1>My applications</h1>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Job</th><th>Company</th><th>Status</th><th>Interview booking</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in applications %}
+      <tr>
+        <td>{{ row.title }}</td>
+        <td>{{ row.company_name }}</td>
+        <td>{{ row.status }}</td>
+        <td>
+          {% if row.booking %}
+            {{ row.booking.start_utc | utc_display }} – {{ row.booking.end_utc | utc_display }}
+          {% else %}
+            <span class="muted">none</span>
+          {% endif %}
+        </td>
+        <td><a class="btn secondary small" href="{{ url_for('candidate.application_detail', application_id=row.application_id) }}">Details</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">You have not applied to any jobs yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
