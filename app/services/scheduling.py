@@ -10,7 +10,7 @@ attempts produce exactly one booking; the loser gets HTTP 409 with the message
 import sqlite3
 from datetime import timedelta
 
-from app.db import get_db, transaction
+from app.db import get_db, transaction, translate_integrity_error
 from app.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from app.timeutils import SLOT_MINUTES, is_future, parse_iso, to_iso, utc_now
 
@@ -41,13 +41,17 @@ def create_slot(employer_id: int, job_id: int, start_utc: str, end_utc: str) -> 
     start, end = _validate_slot_times(start_utc, end_utc)
     if not is_future(start):
         raise ValidationError("Slots must be in the future")
-    with transaction():
-        cur = db.execute(
-            "INSERT INTO interview_slots (job_id, employer_id, start_utc, end_utc, created_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (job_id, employer_id, start, end, to_iso(utc_now())),
-        )
-        return cur.lastrowid
+    try:
+        with transaction():
+            cur = db.execute(
+                "INSERT INTO interview_slots (job_id, employer_id, start_utc, end_utc, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (job_id, employer_id, start, end, to_iso(utc_now())),
+            )
+            return cur.lastrowid
+    except sqlite3.IntegrityError as exc:
+        # FOREIGN KEY: the job vanished between the ownership check and insert.
+        translate_integrity_error(exc, missing_message="Job not found")
 
 
 def delete_slot(employer_id: int, slot_id: int) -> None:
@@ -155,8 +159,11 @@ def book_slot(candidate_id: int, application_id: int, slot_id: int) -> int:
             )
         except sqlite3.IntegrityError as exc:
             # UNIQUE(slot_id) / UNIQUE(application_id): a concurrent writer won
-            # the race between our check and this insert.
-            if "UNIQUE" in str(exc):
-                raise ConflictError(CONFLICT_BOOKED) from exc
-            raise
+            # the race -> 409 "Slot already booked". FOREIGN KEY: the slot or
+            # application vanished mid-booking -> 404, never a 500.
+            translate_integrity_error(
+                exc,
+                conflict_message=CONFLICT_BOOKED,
+                missing_message="Application or slot not found",
+            )
         return cur.lastrowid

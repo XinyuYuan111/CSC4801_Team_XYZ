@@ -11,6 +11,8 @@ from pathlib import Path
 
 from flask import current_app, g
 
+from app.errors import ConflictError, NotFoundError
+
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 
@@ -106,6 +108,22 @@ def close_db(_exc=None):
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
+def translate_integrity_error(exc, conflict_message=None, missing_message=None):
+    """Raise the documented outcome for a write that lost a race (always raises).
+
+    A UNIQUE violation means a concurrent writer inserted first: raise the
+    documented 409 Conflict. A FOREIGN KEY violation means the parent row
+    vanished between the service check and the insert: raise 404 Not Found for
+    the missing object. Anything else is re-raised unchanged.
+    """
+    text = str(exc)
+    if conflict_message is not None and "UNIQUE" in text:
+        raise ConflictError(conflict_message) from exc
+    if missing_message is not None and "FOREIGN KEY" in text:
+        raise NotFoundError(missing_message) from exc
+    raise exc
 
 
 @contextmanager

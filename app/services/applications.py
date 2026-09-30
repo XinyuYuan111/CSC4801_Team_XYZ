@@ -2,8 +2,8 @@
 
 import sqlite3
 
-from app.db import get_db, transaction
-from app.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
+from app.db import get_db, transaction, translate_integrity_error
+from app.errors import AuthorizationError, NotFoundError, ValidationError
 from app.matching import match_score, sort_applicants_for_employer
 from app.timeutils import utc_now_iso
 
@@ -40,9 +40,11 @@ def apply_to_job(candidate_id: int, job_id: int) -> int:
             )
             return cur.lastrowid
     except sqlite3.IntegrityError as exc:
-        if "UNIQUE" in str(exc):
-            raise ConflictError(DUPLICATE_APPLICATION) from exc
-        raise
+        # UNIQUE: a concurrent duplicate won the race -> 409. FOREIGN KEY: the
+        # job vanished between the check and the insert -> 404, never a 500.
+        translate_integrity_error(
+            exc, conflict_message=DUPLICATE_APPLICATION, missing_message="Job not found"
+        )
 
 
 def list_my_applications(candidate_id: int) -> list[dict]:

@@ -13,7 +13,11 @@
   {% endif %}
   <div class="actions">
     <a class="btn secondary" href="{{ url_for('jobs.detail', job_id=application.job_id) }}">View job</a>
-    <a class="btn secondary" href="{{ url_for('candidate.applications') }}">Back to applications</a>
+    {% if current_user and current_user['role'] == 'Employer' %}
+      <a class="btn secondary" href="{{ url_for('employer.applicants', job_id=application.job_id) }}">Back to applicants</a>
+    {% else %}
+      <a class="btn secondary" href="{{ url_for('candidate.applications') }}">Back to applications</a>
+    {% endif %}
   </div>
 </div>
 

@@ -336,3 +336,58 @@ def test_fp_emp_3_applicant_fields_order_status_and_role(client, app, world):
     client.logout()
     client.login("alice@test.local", "Password123!")
     assert client.get(f"/jobs/{backend}/applicants").status_code == 403
+
+
+def test_fp_can_3_race_window_foreign_key_failure_maps_to_not_found(app, world, monkeypatch):
+    """A job that vanishes between the check and the insert maps to 404, not 500.
+
+    The test double reports the job as present for the existence check so the
+    real INSERT hits the FOREIGN KEY constraint (parent row actually missing).
+    """
+    ids = world()
+    alice = ids["users"]["alice"]
+
+    class _PhantomResult:
+        def fetchone(self):
+            return object()  # non-None: the check believes the job exists
+
+    class _PhantomJobDb:
+        def __init__(self, real):
+            self._real = real
+
+        def execute(self, sql, *args, **kwargs):
+            if sql.startswith("SELECT id FROM jobs"):
+                return _PhantomResult()
+            return self._real.execute(sql, *args, **kwargs)
+
+    with app.app_context():
+        from app.db import get_db as real_get_db
+
+        real = real_get_db()
+        monkeypatch.setattr(applications_service, "get_db", lambda: _PhantomJobDb(real))
+        with pytest.raises(NotFoundError) as excinfo:
+            applications_service.apply_to_job(alice, 999999)
+        assert excinfo.value.status == 404
+        assert excinfo.value.message == "Job not found"
+
+        # The failed attempt leaves no partial rows behind.
+        n = real.execute(
+            "SELECT COUNT(*) AS n FROM applications WHERE job_id = 999999"
+        ).fetchone()["n"]
+        assert n == 0
+
+
+def test_fp_emp_3_employer_application_detail_back_link(client, app, world):
+    """The shared application page routes the employer back to the applicant list."""
+    ids = world()
+    alice = ids["users"]["alice"]
+    backend = ids["jobs"]["backend"]
+    with app.app_context():
+        applications_service.apply_to_job(alice, backend)
+        app_id = applications_service.list_my_applications(alice)[0]["application_id"]
+
+    client.login("ana@test.local", "Password123!")
+    page = client.get(f"/applications/{app_id}")
+    assert page.status_code == 200
+    assert f"href=\"/jobs/{backend}/applicants\"".encode() in page.data
+    assert b'href="/applications"' not in page.data

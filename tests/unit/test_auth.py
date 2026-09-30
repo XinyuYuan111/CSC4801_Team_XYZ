@@ -1,5 +1,9 @@
 """Unit tests for FP-AUTH-1..3: accounts, credential storage, server-side authorization."""
 
+import pytest
+
+from app.errors import ConflictError
+
 
 def test_fp_auth_1_registration_and_session_lifecycle(client, app, db):
     # Register a candidate: created and logged in (land on the candidate dashboard).
@@ -150,3 +154,29 @@ def test_fp_auth_3_authorization_and_missing_object(client, world):
 
     # Secrets never appear in responses.
     assert b"Password123!" not in client.get("/profile").data
+
+
+def test_fp_auth_1_concurrent_duplicate_registration_maps_to_conflict(app, db):
+    """A duplicate that wins the check-insert race maps to 409, never a 500.
+
+    Duplicate detection is the UNIQUE(email) constraint inside the insert
+    transaction (same pattern as apply_to_job), so two concurrent registrations
+    cannot both pass a pre-check and crash on the second insert.
+    """
+    from app.services import auth as auth_service
+
+    with app.app_context():
+        auth_service.register_user(
+            "race@example.com", "Password123!", "Candidate", display_name="Racer"
+        )
+        with pytest.raises(ConflictError) as excinfo:
+            auth_service.register_user(
+                "race@example.com", "Password123!", "Candidate", display_name="Other"
+            )
+        assert excinfo.value.status == 409
+        assert excinfo.value.message == "Email already registered"
+
+    count = db.execute(
+        "SELECT COUNT(*) AS n FROM users WHERE email = 'race@example.com'"
+    ).fetchone()["n"]
+    assert count == 1

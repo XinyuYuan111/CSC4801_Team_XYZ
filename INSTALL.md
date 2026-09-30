@@ -45,15 +45,22 @@ placeholders only.
 
 ## Database Setup and Migrations
 
-Schema creation is idempotent (`CREATE TABLE IF NOT EXISTS`); there is no
-separate migration history to run.
+Schema creation is idempotent (`CREATE TABLE IF NOT EXISTS`); it only creates
+missing tables, never alters existing ones, and there is no separate migration
+history to run.
 
 ```bash
 python manage.py init-db
 ```
 
-Repeat after every code pull that changes `app/db.py`; it is safe to run any
-time. To point at another database file: `DATABASE=/path/to.sqlite3 python manage.py init-db`.
+It is safe to run any time. To point at another database file:
+`DATABASE=/path/to/app.sqlite3 python manage.py init-db`.
+
+**After a pull that changes the schema in `app/db.py`** (for example a
+constraint or foreign-key change such as `CASCADE` to `RESTRICT`), `init-db`
+alone leaves an existing database file on the old shape. Recreate the schema
+with `python manage.py seed` (drops and recreates all tables), or delete
+`data/app.sqlite3` and run `init-db` again.
 
 ## Demo Data and Reset Command
 

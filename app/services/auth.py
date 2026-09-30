@@ -1,12 +1,15 @@
 """Account registration, authentication, and role checks (FP-AUTH-1..3)."""
 
-from app.db import get_db, transaction
-from app.errors import AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError
+import sqlite3
+
+from app.db import get_db, transaction, translate_integrity_error
+from app.errors import AuthenticationError, AuthorizationError, NotFoundError, ValidationError
 from app.security import hash_password, verify_password
 from app.timeutils import utc_now_iso
 
 ROLES = ("Candidate", "Employer")
 MIN_PASSWORD_LEN = 8
+DUPLICATE_EMAIL = "Email already registered"
 
 
 def _validate_email(email: str) -> str:
@@ -17,7 +20,13 @@ def _validate_email(email: str) -> str:
 
 
 def register_user(email: str, password: str, role: str, display_name: str = "", company_name: str = "") -> int:
-    """Create a user with the given role. Email identifiers are unique (FP-AUTH-1)."""
+    """Create a user with the given role. Email identifiers are unique (FP-AUTH-1).
+
+    Duplicate detection is the ``UNIQUE (email)`` constraint itself (checked
+    inside the insert transaction), so concurrent duplicate registrations
+    cannot create a second row and both observe the documented
+    ``409 Email already registered`` outcome instead of a 500.
+    """
     email = _validate_email(email)
     if role not in ROLES:
         raise ValidationError("Role must be Candidate or Employer")
@@ -29,27 +38,26 @@ def register_user(email: str, password: str, role: str, display_name: str = "", 
         raise ValidationError("Company name is required for employers")
 
     db = get_db()
-    existing = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
-    if existing is not None:
-        raise ConflictError("Email already registered")
-
     password_hash = hash_password(password)
-    with transaction():
-        cur = db.execute(
-            "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
-            (email, password_hash, role, utc_now_iso()),
-        )
-        user_id = cur.lastrowid
-        if role == "Candidate":
-            db.execute(
-                "INSERT INTO candidate_profiles (user_id, display_name, resume_text) VALUES (?, ?, '')",
-                (user_id, display_name.strip()),
+    try:
+        with transaction():
+            cur = db.execute(
+                "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
+                (email, password_hash, role, utc_now_iso()),
             )
-        else:
-            db.execute(
-                "INSERT INTO company_profiles (user_id, company_name, description) VALUES (?, ?, '')",
-                (user_id, company_name.strip()),
-            )
+            user_id = cur.lastrowid
+            if role == "Candidate":
+                db.execute(
+                    "INSERT INTO candidate_profiles (user_id, display_name, resume_text) VALUES (?, ?, '')",
+                    (user_id, display_name.strip()),
+                )
+            else:
+                db.execute(
+                    "INSERT INTO company_profiles (user_id, company_name, description) VALUES (?, ?, '')",
+                    (user_id, company_name.strip()),
+                )
+    except sqlite3.IntegrityError as exc:
+        translate_integrity_error(exc, conflict_message=DUPLICATE_EMAIL)
     return user_id
 
 
