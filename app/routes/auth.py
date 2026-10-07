@@ -3,7 +3,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
 from app.errors import AppError
-from app.routes.helpers import clear_session, login_required
+from app.routes.helpers import clear_session, current_user, login_required
 from app.services import auth as auth_service
 
 
@@ -16,6 +16,16 @@ def _start_session(user_id: int):
 
 
 bp = Blueprint("auth", __name__)
+
+
+@bp.route("/")
+def home():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("auth.login"))
+    if user["role"] == "Employer":
+        return redirect(url_for("employer.jobs"))
+    return redirect(url_for("candidate.dashboard"))
 
 
 @bp.route("/register", methods=("GET", "POST"))

@@ -112,6 +112,7 @@ return `405`.
 
 | Route | Method | Who | Behavior |
 |---|---|---|---|
+| `/` | GET | public | Redirects to login when unauthenticated, otherwise to the current role's home page |
 | `/register` | GET, POST | public | Registration form; creates user + profile row and logs in |
 | `/login` | GET, POST | public | Login form; `401` on bad credentials |
 | `/logout` | POST | logged in | Clears session |

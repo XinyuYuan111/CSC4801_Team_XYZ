@@ -46,7 +46,7 @@
 <body>
 <header>
   <nav class="nav">
-    <a class="brand" href="{{ url_for('auth.login') }}">TalentMatch</a>
+    <a class="brand" href="{{ url_for('auth.home') }}">TalentMatch</a>
     {% if current_user %}
       {% if current_user['role'] == 'Candidate' %}
         <a href="{{ url_for('candidate.dashboard') }}">Jobs</a>

@@ -5,6 +5,51 @@ import pytest
 from app.errors import ConflictError
 
 
+def test_home_redirects_anonymous_visitors_to_login(client):
+    response = client.get("/")
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/login"
+    assert client.get("/", follow_redirects=True).status_code == 200
+    assert client.get("/missing-page").status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("role", "destination"),
+    [("Candidate", "/dashboard"), ("Employer", "/employer/jobs")],
+)
+def test_home_uses_existing_login_session(client, role, destination):
+    response = client.register(
+        "home@test.local", "Password123!", role,
+        display_name="Home User", company_name="Home Company",
+    )
+    assert response.status_code == 302
+
+    response = client.get("/")
+    assert response.status_code == 302
+    assert response.headers["Location"] == destination
+    page = client.get("/", follow_redirects=True)
+    assert page.status_code == 200
+    assert b"home@test.local" in page.data
+    assert b'class="brand" href="/"' in page.data
+
+    error_page = client.get("/missing-page")
+    assert error_page.status_code == 404
+    assert b'href="/">Home</a>' in error_page.data
+
+    client.logout()
+    assert client.get("/").headers["Location"] == "/login"
+
+
+def test_home_treats_a_session_for_a_missing_user_as_logged_out(app):
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["user_id"] = 99999
+
+    response = client.get("/")
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/login"
+
+
 def test_fp_auth_1_registration_and_session_lifecycle(client, app, db):
     # Register a candidate: created and logged in (land on the candidate dashboard).
     response = client.register("new@example.com", "Password123!", "Candidate", display_name="New User")
