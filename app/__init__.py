@@ -1,7 +1,7 @@
 """Flask application factory (FP-ARCH-1).
 
-Server-rendered UI over a service layer that enforces every business rule and
-authorization decision. Error pages carry the FP-AUTH-3 status contract.
+Server-rendered UI with route-level authentication/role checks and service-level
+business rules/ownership checks. Error pages carry the FP-AUTH-3 status contract.
 """
 
 import os
@@ -11,7 +11,7 @@ from pathlib import Path
 from flask import Flask, g, render_template, request, session
 
 from app import db as db_module
-from app.errors import AppError, AuthorizationError
+from app.errors import AppError, AuthenticationError, AuthorizationError
 from app.security import csrf_token_valid, new_csrf_token
 from app.timeutils import format_display
 
@@ -52,6 +52,16 @@ def create_app(test_config=None) -> Flask:
             ).fetchone()
             if row is not None:
                 g.user = dict(row)
+        # Let Flask report unmatched routes/methods as 404/405. For protected
+        # POSTs, authentication takes precedence over CSRF (FP-AUTH-3).
+        if request.url_rule is None:
+            return
+        if (
+            request.method == "POST"
+            and g.user is None
+            and request.endpoint not in {"auth.login", "auth.register"}
+        ):
+            raise AuthenticationError("Please log in")
         if request.method == "POST" and not csrf_token_valid(
             session.get("csrf_token", ""), request.form.get("csrf_token", "")
         ):

@@ -293,3 +293,37 @@ def test_fp_sched_3_http_conflict_status_and_message(client, app, world):
     response = client.post("/bookings", data={"application_id": bob_app, "slot_id": slot_id})
     assert response.status_code == 409
     assert b"Slot already booked" in response.data
+
+
+def test_fp_sched_1_employer_availability_after_start(client, app, world, monkeypatch):
+    """A slot reaching its start time is no longer labeled available."""
+    from app.timeutils import parse_iso
+
+    ids = world()
+    ana, alice = ids["users"]["ana"], ids["users"]["alice"]
+    backend = ids["jobs"]["backend"]
+    start = make_future_slot_start()
+    app_id = _interview_app(app, ids, "alice", "backend")
+    with app.app_context():
+        slot_id = scheduling_service.create_slot(ana, backend, start, make_slot_end(start))
+        booked_id = scheduling_service.create_slot(
+            ana, backend, plus_minutes(start, 60), plus_minutes(start, 90)
+        )
+        scheduling_service.book_slot(alice, app_id, booked_id)
+        rows = {r["slot_id"]: r for r in scheduling_service.list_slots_for_employer(ana)}
+        assert rows[slot_id]["available"] is True
+        assert rows[booked_id]["available"] is False
+    client.login("ana@test.local", "Password123!")
+    assert b">available<" in client.get("/employer/slots").data
+
+    monkeypatch.setattr(scheduling_service, "utc_now", lambda: parse_iso(start))
+    with app.app_context():
+        rows = {r["slot_id"]: r for r in scheduling_service.list_slots_for_employer(ana)}
+        assert rows[slot_id]["available"] is False
+        assert rows[booked_id]["booking_id"] is not None
+        assert scheduling_service.list_available_slots(ana) == []
+    page = client.get("/employer/slots")
+    assert page.status_code == 200
+    assert b">available<" not in page.data
+    assert b">expired<" in page.data
+    assert b"booked (application #" in page.data

@@ -225,3 +225,67 @@ def test_fp_auth_1_concurrent_duplicate_registration_maps_to_conflict(app, db):
         "SELECT COUNT(*) AS n FROM users WHERE email = 'race@example.com'"
     ).fetchone()["n"]
     assert count == 1
+
+
+@pytest.mark.parametrize("user_id", [None, 99999])
+def test_fp_auth_3_anonymous_posts_before_csrf(app, user_id):
+    """Raw requests, including stale sessions, must not be masked by CSRF."""
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["csrf_token"] = "valid-test-token"
+        if user_id is not None:
+            session["user_id"] = user_id
+    paths = (
+        "/logout", "/profile", "/company", "/candidates/1/resume",
+        "/employer/jobs/new", "/jobs/1/edit", "/jobs/1/delete",
+        "/jobs/1/apply", "/applications/1/status", "/employer/slots",
+        "/slots/1/delete", "/bookings",
+    )
+    for path in paths:
+        for token in (None, "", "wrong", "\u00e9", "valid-test-token"):
+            data = {} if token is None else {"csrf_token": token}
+            response = client.post(path, data=data)
+            assert response.status_code == 401, (path, token)
+            assert b"Please log in" in response.data
+
+    assert client.post("/missing-page").status_code == 404
+    assert client.post("/dashboard").status_code == 405
+
+
+def test_csrf_invalid_tokens_rejected_without_mutation(app):
+    """Public auth forms and authenticated writes reject malformed tokens."""
+    from app.db import get_db
+
+    client = app.test_client()
+    for path in ("/login", "/register"):
+        for token in (None, "", "wrong", "\u00e9", "\u4e2d\u6587"):
+            data = {"email": "csrf@test.local", "password": "Password123!",
+                    "role": "Candidate", "display_name": "Original"}
+            if token is not None:
+                data["csrf_token"] = token
+            response = client.post(path, data=data)
+            assert response.status_code == 403
+            assert b"Invalid or missing CSRF token" in response.data
+    with app.app_context():
+        assert get_db().execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0
+
+    with client.session_transaction() as session:
+        valid_token = session["csrf_token"]
+    assert client.post("/register", data={
+        "email": "csrf@test.local", "password": "Password123!",
+        "role": "Candidate", "display_name": "Original", "csrf_token": valid_token,
+    }).status_code == 302
+    for token in (None, "", "wrong", "\u00e9", "\u4e2d\u6587"):
+        data = {"display_name": "Changed", "skills": "SQL"}
+        if token is not None:
+            data["csrf_token"] = token
+        assert client.post("/profile", data=data).status_code == 403
+        with app.app_context():
+            db = get_db()
+            assert db.execute("SELECT display_name FROM candidate_profiles").fetchone()[0] == "Original"
+            assert db.execute("SELECT COUNT(*) FROM candidate_skills").fetchone()[0] == 0
+    assert client.post("/profile", data={
+        "display_name": "Changed", "skills": "SQL", "csrf_token": valid_token,
+    }).status_code == 302
+    with app.app_context():
+        assert get_db().execute("SELECT display_name FROM candidate_profiles").fetchone()[0] == "Changed"

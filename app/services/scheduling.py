@@ -78,7 +78,7 @@ def delete_slot(employer_id: int, slot_id: int) -> None:
 
 
 def list_slots_for_employer(employer_id: int) -> list[dict]:
-    """All slots owned by the employer, with booking state."""
+    """All owned slots; only future, unbooked slots are available."""
     db = get_db()
     rows = db.execute(
         """
@@ -92,7 +92,11 @@ def list_slots_for_employer(employer_id: int) -> list[dict]:
         """,
         (employer_id,),
     ).fetchall()
-    return [dict(row) for row in rows]
+    now = utc_now()
+    return [
+        {**dict(row), "available": row["booking_id"] is None and is_future(row["start_utc"], now)}
+        for row in rows
+    ]
 
 
 def list_available_slots(employer_id: int) -> list[dict]:

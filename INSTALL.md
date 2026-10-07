@@ -84,7 +84,7 @@ accounts):
 
 | Email | Password | Role |
 |---|---|---|
-| `alice@demo.local` | `DemoPass123!` | Candidate (Python, SQL, Docker) |
+| `alice@demo.local` | `DemoPass123!` | Candidate (Python, SQL) |
 | `bob@demo.local` | `DemoPass123!` | Candidate (Python) |
 | `cara@demo.local` | `DemoPass123!` | Candidate (Rust) |
 | `ana@demo.local` | `DemoPass123!` | Employer (Acme Corp) |

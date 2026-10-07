@@ -38,8 +38,10 @@
         <td>
           {% if row.booking_id %}
             <span class="pill">booked (application #{{ row.application_id }})</span>
-          {% else %}
+          {% elif row.available %}
             <span class="muted">available</span>
+          {% else %}
+            <span class="muted">expired</span>
           {% endif %}
         </td>
         <td>

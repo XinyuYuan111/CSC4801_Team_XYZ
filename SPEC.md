@@ -25,10 +25,10 @@ four statuses; 30-minute interview availability slots. No LLM is used anywhere
 Browser (Jinja2 HTML forms/pages)
    │  HTTP (cookies: signed session + CSRF token in forms)
    ▼
-Flask routes (app/routes/)          ← thin: parse input, render outcomes
+Flask routes (app/routes/)          ← authentication/roles, parse input, render outcomes
    │  raise typed errors → HTTP 400/401/403/404/409 pages (app/errors.py)
    ▼
-Service layer (app/services/)       ← ALL business rules + authorization
+Service layer (app/services/)       ← business rules + object ownership checks
    │  parameterized SQL only (FP-SEC-2)
    ▼
 SQLite (app/db.py)                  ← schema, BEGIN IMMEDIATE transactions
@@ -74,15 +74,18 @@ roles. Passwords are stored with `werkzeug.security.generate_password_hash`
 uses `check_password_hash`; unknown email and wrong password are
 indistinguishable (`401 Invalid email or password`). Password hashes are never
 returned by any code path or rendered in any template. Sessions are signed
-Flask session cookies containing only `user_id` and role lookup — logout clears
-the session. Unauthenticated access:
+Flask session cookies containing `user_id`, a CSRF token, and flash messages;
+the role is loaded from the database. Logout removes `user_id`. Unauthenticated access:
 
 - `GET` of a protected page → `302` redirect to `/login` (the FP-AUTH-3
   "redirect to login" option);
 - any other method → `401 Unauthorized` page.
 
 **Authorization (FP-AUTH-3, FP-SEC-1).** Every protected operation is enforced
-in the service layer on the server (hiding buttons is never the control). The
+on the server: request handling and route decorators check authentication and
+roles; services check object ownership using the authenticated user's ID supplied
+by the route. Service methods are internal calls, not independent public APIs.
+Hiding buttons is never the control. The
 observable contract:
 
 | Situation | Outcome |
@@ -115,7 +118,7 @@ return `405`.
 | `/` | GET | public | Redirects to login when unauthenticated, otherwise to the current role's home page |
 | `/register` | GET, POST | public | Registration form; creates user + profile row and logs in |
 | `/login` | GET, POST | public | Login form; `401` on bad credentials |
-| `/logout` | POST | logged in | Clears session |
+| `/logout` | POST | logged in | Removes authenticated user ID from session |
 
 ### Candidate (`app/routes/candidate.py`)
 
@@ -148,11 +151,15 @@ return `405`.
 | `/jobs/<id>/delete` | POST | Employer owner | Delete; `409` if applications or slots exist |
 | `/jobs/<id>/applicants` | GET | Employer owner | Applicants sorted by score with full rows (FP-EMP-3) |
 | `/applications/<id>/status` | POST | Employer owner | Set `Pending/Interviewing/Rejected/Accepted` |
-| `/employer/slots` | GET | Employer | Own slots with booked/available state |
+| `/employer/slots` | GET | Employer | Own slots with booked/available/expired state |
 | `/employer/slots` | POST | Employer | Create a future 30-minute slot for one owned job (form takes start; end = start + 30 min) |
 | `/slots/<id>/delete` | POST | Employer owner | Delete unbooked slot; `409` if booked |
 
-Every POST requires a valid session CSRF token (`403` otherwise).
+Protected POSTs check authentication first (`401` when logged out, including
+missing/stale sessions, regardless of the submitted CSRF token). Public login
+and registration POSTs, and authenticated POSTs, require a valid session CSRF
+token (`403` for missing, incorrect, or non-ASCII tokens). Unmatched routes and
+unsupported methods retain Flask's `404`/`405` outcomes.
 
 ## User Interface and Workflows
 
@@ -207,7 +214,9 @@ posting (so job deletion correctly reports dependent interview slots — FP-EMP-
 Creation rejects: malformed timestamps, end ≤ start, any duration other than 30
 minutes, non-future start, foreign/missing job (`403`/`404`). Deletion rejects a
 booked slot (`409`) and a foreign/missing slot (`403`/`404`). Availability
-listings exclude booked and past slots.
+listings exclude booked and past slots. The employer's management list retains
+all slots: booked slots remain labeled booked; unbooked slots at or before their
+start time are labeled expired rather than available.
 
 **Booking eligibility (FP-SCHED-2).** `book_slot(candidate, application, slot)`
 succeeds **iff** all of: the candidate owns the application (`403` otherwise);
@@ -232,13 +241,13 @@ gets HTTP `409` and that message.
 | Control | Design |
 |---|---|
 | Password storage (FP-AUTH-2) | Salted established hash (werkzeug scrypt/PBKDF2); never plain text/reversible/fast-unsalted; hashes never leave the data layer |
-| Server-side authorization (FP-AUTH-3) | Service-layer role + ownership checks on every operation; UI hiding is not a control; 401/403/404 contract above |
+| Server-side authorization (FP-AUTH-3) | Request/route authentication and role checks plus service-level object ownership checks; UI hiding is not a control; 401/403/404 contract above |
 | Object access (FP-SEC-1) | Every object read/write re-checks ownership against the session user; unit-tested boundaries: cross-candidate resume/application, cross-employer job/applicants, booking with a foreign application |
 | SQL injection (FP-SEC-2) | 100% parameterized queries (`?` placeholders) through `sqlite3`; no string-built SQL with user input; metacharacter unit test |
 | XSS (FP-SEC-3) | All user text (profile, resume, company, job, search-like fields) rendered through Jinja2 autoescaping; no `\|safe` filters; `escape_html` helper for non-template paths; `<script>alert(1)</script>` unit test |
-| CSRF | Per-session token required on every POST (defense in depth beyond the graded MUST set) |
+| CSRF | Per-session token on public auth POSTs and authenticated POSTs; protected anonymous POSTs fail authentication first; malformed tokens fail safely |
 | Secrets & test isolation (FP-SEC-4) | No real secrets/personal data in the repository (demo data uses `demo.local`); `.env.example` placeholders only; unit tests use per-test isolated SQLite files and never call third-party services |
-| Sessions | Signed HttpOnly cookies; logout clears session; optional `SECRET_KEY` env var |
+| Sessions | Signed HttpOnly cookies; logout removes authenticated user ID; optional `SECRET_KEY` env var |
 
 ## Optional AI Features and Data Flow
 

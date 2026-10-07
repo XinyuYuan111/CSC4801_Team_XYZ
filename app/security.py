@@ -33,4 +33,12 @@ def new_csrf_token() -> str:
 
 
 def csrf_token_valid(session_token: str, submitted_token: str) -> bool:
-    return bool(session_token) and hmac.compare_digest(session_token, submitted_token or "")
+    # Generated tokens are ASCII. Reject malformed form input before passing
+    # it to compare_digest, which raises TypeError for non-ASCII strings.
+    return (
+        bool(session_token)
+        and bool(submitted_token)
+        and session_token.isascii()
+        and submitted_token.isascii()
+        and hmac.compare_digest(session_token, submitted_token)
+    )

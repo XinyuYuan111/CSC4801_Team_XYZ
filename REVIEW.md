@@ -1,5 +1,14 @@
 # 工程实现审查报告（对照 REQUIREMENTS.md）— 第二轮复查
 
+> **2026-10-07 更新说明**：下文为 2026-09-29 的历史审查记录，不代表当前待办清单。
+> 其中「新-1」「新-2」「新-4」已有代码修复，「新-3」的升级限制已在 INSTALL.md 中说明。
+> 本次进一步修复未登录 POST 被 CSRF 检查遮蔽而返回 403 的问题，以及非 ASCII
+> CSRF token 导致 500、雇主列表把过期时段标为 available 的问题；新增原始请求
+> 和时段到期回归测试。SPEC.md 同步实际权限分层及响应优先级，INSTALL.md 更正
+> Alice 的种子技能为 Python、SQL。本轮 Docker 构建成功，容器内执行
+> `python -m pytest tests/unit -q`：**37 passed**（仅 pytest 缓存目录权限警告，
+> 不影响测试结果）。下文测试数量为历史值。
+
 - **审查对象**：本目录（Team_XYZ / TalentMatch，Flask + SQLite 实现）
 - **审查依据**：`CSC4801_final_project/REQUIREMENTS.md`（仅强制 **MUST / MUST NOT**；**MAY** 项不作要求）
 - **复查范围**：修复提交 `d7d0eba`（相对首轮审查基线 `da647e3`，18 个文件 +293/−149）
