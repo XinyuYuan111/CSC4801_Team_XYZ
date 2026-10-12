@@ -90,6 +90,16 @@ failure):
 python -m pytest tests/unit -q
 ```
 
+Additional integration, HTTP/system, regression, robustness, performance,
+accessibility, and configuration tests supplement the required unit suite;
+they do not replace the FP-TEST-1 tests or the mapping below. Run all layers with:
+
+```bash
+python -m pytest tests -q
+```
+
+See [`REVIEW.md`](REVIEW.md) for findings and requirement-based corrections.
+
 ## Requirement–Test Mapping
 
 Every requirement ID from `CSC4801_final_project/REQUIREMENTS.md` is listed.
@@ -100,19 +110,19 @@ Functional requirements map to named student-written unit tests in
 | Requirement ID | Behavior to verify | Implementation file(s) | Unit test(s) / verification evidence |
 |---|---|---|---|
 | FP-ARCH-1 | Browser UI + API/server + persistent relational DB; runs from clean checkout | `app/` (Flask+Jinja UI, service layer), `app/db.py` (SQLite), `Dockerfile`, `run.py` | Evidence: `python -m pytest tests/unit -q` green from clean checkout; `INSTALL.md` Docker build/start; no paid credentials required (no LLM in core path) |
-| FP-AUTH-1 | Register / login / logout; unique email identifiers | `app/services/auth.py`, `app/routes/auth.py` | `tests/unit/test_auth.py::test_fp_auth_1_registration_and_session_lifecycle`; `tests/unit/test_auth.py::test_fp_auth_1_invalid_registration` |
+| FP-AUTH-1 | Register / login / logout; unique email identifiers | `app/services/auth.py`, `app/routes/auth.py` | `tests/unit/test_auth.py::test_fp_auth_1_registration_and_session_lifecycle`; `tests/unit/test_auth.py::test_fp_auth_1_invalid_registration`; `tests/unit/test_auth.py::test_fp_auth_1_registration_preserves_existing_session` |
 | FP-AUTH-2 | Salted established password hash; no secrets in API/UI; `authenticate()` returns only non-secret columns | `app/security.py`, `app/services/auth.py` | `tests/unit/test_auth.py::test_fp_auth_2_salted_hash_and_password_verification` |
-| FP-AUTH-3 | Server-side 401 (or login redirect) / 403 / 404 outcomes; authentication precedes CSRF on protected POSTs | `app/__init__.py`, `app/routes/helpers.py`, `app/services/*`, `app/errors.py`, `app/security.py` | `tests/unit/test_auth.py::test_fp_auth_3_authorization_and_missing_object`; `tests/unit/test_auth.py::test_fp_auth_3_anonymous_posts_before_csrf`; `tests/unit/test_auth.py::test_csrf_invalid_tokens_rejected_without_mutation` |
+| FP-AUTH-3 | Server-side 401 (or login redirect) / 403 / 404 outcomes; authentication precedes CSRF on protected POSTs | `app/__init__.py`, `app/routes/helpers.py`, `app/services/*`, `app/errors.py`, `app/security.py` | `tests/unit/test_auth.py::test_fp_auth_3_authorization_and_missing_object`; `tests/unit/test_auth.py::test_fp_auth_3_anonymous_posts_before_csrf`; `tests/unit/test_auth.py::test_csrf_invalid_tokens_rejected_without_mutation`; `tests/unit/test_auth.py::test_fp_auth_3_oversized_object_ids` |
 | FP-CAN-1 | Own profile + skills; private raw-text resume (403 for others) | `app/services/profiles.py`, `app/routes/candidate.py` | `tests/unit/test_workflows.py::test_fp_can_1_profile_and_private_resume_rules` |
 | FP-CAN-2 | Dashboard lists all jobs with score, title, company, skills, description link; sorted by score | `app/services/jobs.py`, `app/matching.py`, `app/templates/candidate/dashboard.html` | `tests/unit/test_workflows.py::test_fp_can_2_recommendations_preserve_fields_and_rank_all_jobs` |
 | FP-CAN-3 | Apply once → `Pending`; duplicate → 409 without a second row (constraint-backed); own applications show job/employer/status/booking; no cross-candidate access or status changes | `app/services/applications.py`, `app/routes/jobs.py` | `tests/unit/test_workflows.py::test_fp_can_3_pending_duplicate_and_application_owner` |
 | FP-EMP-1 | Company profile view/edit (name + description) | `app/services/profiles.py`, `app/routes/employer.py` | `tests/unit/test_workflows.py::test_fp_emp_1_company_profile` |
 | FP-EMP-2 | Job CRUD with title/description/skills; 403 foreign postings on **GET and POST of edit**; delete blocked by applications/slots with 409; RESTRICT FK backstop | `app/services/jobs.py`, `app/routes/employer.py` | `tests/unit/test_workflows.py::test_fp_emp_2_job_validation_and_deletion` |
-| FP-EMP-3 | Applicants sorted by score with identity/skills/score/status/booking; owner sets the four statuses only; owning employer can open application detail | `app/services/applications.py`, `app/matching.py` | `tests/unit/test_workflows.py::test_fp_emp_3_applicant_fields_order_status_and_role` |
+| FP-EMP-3 | Applicants sorted by score with identity/skills/score/status/booking; owner sets the four statuses only; owning employer can open application detail | `app/services/applications.py`, `app/matching.py` | `tests/unit/test_workflows.py::test_fp_emp_3_applicant_fields_order_status_and_role`; `tests/unit/test_workflows.py::test_fp_emp_3_status_redirect_uses_stored_job` |
 | FP-MATCH-1 | Deterministic skill-overlap score, normalization, four examples, both tie-breakers | `app/matching.py` | `tests/unit/test_matching.py::test_fp_match_1_examples_normalization_and_floor`; `tests/unit/test_matching.py::test_fp_match_1_both_tie_breakers` |
 | FP-MATCH-2 | Optional AI enhancement | N/A | N/A — not implemented (see Known Limitations) |
-| FP-SCHED-1 | Future 30-minute UTC slots; create/delete; reject invalid durations and past slots; booked slots undeletable and never available; expired slots labeled correctly | `app/services/scheduling.py`, `app/timeutils.py`, `app/templates/employer/slots.html` | `tests/unit/test_scheduling.py::test_fp_sched_1_slot_creation_timezones_and_deletion`; `tests/unit/test_scheduling.py::test_fp_sched_1_invalid_slots`; `tests/unit/test_scheduling.py::test_fp_sched_1_employer_availability_after_start` |
-| FP-SCHED-2 | Booking eligibility (owner, employer match, `Interviewing`, future & free slot, no prior booking); booking survives status change | `app/services/scheduling.py` | `tests/unit/test_scheduling.py::test_fp_sched_2_eligible_booking`; `tests/unit/test_scheduling.py::test_fp_sched_2_ineligible_booking`; `tests/unit/test_scheduling.py::test_fp_sched_2_booking_survives_status_change` |
+| FP-SCHED-1 | Future 30-minute UTC slots; create/delete; reject invalid durations and past slots; booked slots undeletable and never available; expired slots labeled correctly | `app/services/scheduling.py`, `app/timeutils.py`, `app/templates/employer/slots.html` | `tests/unit/test_scheduling.py::test_fp_sched_1_slot_creation_timezones_and_deletion`; `tests/unit/test_scheduling.py::test_fp_sched_1_invalid_slots`; `tests/unit/test_scheduling.py::test_fp_sched_1_employer_availability_after_start`; `tests/unit/test_scheduling.py::test_fp_sched_1_datetime_overflow_is_validation_error` |
+| FP-SCHED-2 | Booking eligibility (owner, employer match, `Interviewing`, future & free slot, no prior booking); booking survives status change | `app/services/scheduling.py` | `tests/unit/test_scheduling.py::test_fp_sched_2_eligible_booking`; `tests/unit/test_scheduling.py::test_fp_sched_2_ineligible_booking`; `tests/unit/test_scheduling.py::test_fp_sched_2_booking_survives_status_change`; `tests/unit/test_scheduling.py::test_fp_sched_2_shared_employer_availability` |
 | FP-SCHED-3 | Atomic booking; race loser gets 409 `Slot already booked`; exactly one booking remains | `app/services/scheduling.py`, `app/db.py` (`BEGIN IMMEDIATE` + `UNIQUE`) | `tests/unit/test_scheduling.py::test_fp_sched_3_conflict_contract`; `tests/unit/test_scheduling.py::test_fp_sched_3_http_conflict_status_and_message` |
 | FP-SEC-1 | Object-ID changes do not bypass authorization (resume/application, foreign job edit GET+POST/applicants, booking with foreign application) | ownership checks in `app/services/profiles.py`, `app/services/jobs.py` (`get_owned_job`), `app/services/applications.py`, `app/services/scheduling.py` | `tests/unit/test_security.py::test_fp_sec_1_candidate_cannot_access_other_resume_or_application`; `tests/unit/test_security.py::test_fp_sec_1_employer_cannot_modify_others_job_or_read_applicants`; `tests/unit/test_security.py::test_fp_sec_1_candidate_cannot_book_with_others_application` |
 | FP-SEC-2 | Parameterized SQL; metacharacters stay bound values | `app/db.py` and all service queries (`?` placeholders) | `tests/unit/test_security.py::test_fp_sec_2_sql_metacharacters_stay_bound` |

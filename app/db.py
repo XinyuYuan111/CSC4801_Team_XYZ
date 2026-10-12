@@ -13,6 +13,14 @@ from flask import current_app, g
 
 from app.errors import ConflictError, NotFoundError
 
+
+def object_id(value: int) -> int:
+    """Reject IDs outside SQLite's signed INTEGER range as missing objects."""
+    if not -(2**63) <= value < 2**63:
+        raise NotFoundError("Object not found")
+    return value
+
+
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 

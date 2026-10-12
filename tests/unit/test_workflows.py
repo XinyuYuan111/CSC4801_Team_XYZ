@@ -377,6 +377,23 @@ def test_fp_can_3_race_window_foreign_key_failure_maps_to_not_found(app, world, 
         assert n == 0
 
 
+def test_fp_emp_3_status_redirect_uses_stored_job(client, app, world):
+    ids = world()
+    with app.app_context():
+        application_id = applications_service.apply_to_job(ids["users"]["alice"], ids["jobs"]["backend"])
+    client.login("ana@test.local", "Password123!")
+    for extra in ({}, {"job_id": ids["jobs"]["analyst"]}, {"job_id": "bad"}):
+        response = client.post(f"/applications/{application_id}/status", {"status": "Interviewing", **extra})
+        assert response.status_code == 302
+        assert response.headers["Location"] == f"/jobs/{ids['jobs']['backend']}/applicants"
+        assert client.get(response.headers["Location"]).status_code == 200
+    client.logout()
+    client.login("ben@test.local", "Password123!")
+    assert client.post(f"/applications/{application_id}/status", {"status": "invalid"}).status_code == 403
+    with app.app_context():
+        assert applications_service.get_application_for_candidate(ids["users"]["alice"], application_id)["status"] == "Interviewing"
+
+
 def test_fp_emp_3_employer_application_detail_back_link(client, app, world):
     """The shared application page routes the employer back to the applicant list."""
     ids = world()

@@ -111,14 +111,11 @@ def applicants(job_id: int):
 @bp.route("/applications/<int:application_id>/status", methods=("POST",))
 @role_required("Employer")
 def set_status(application_id: int):
-    job_id = request.form.get("job_id", type=int)
-    if job_id is None:
-        raise ValidationError("Missing job reference")
-    applications_service.set_status(
+    detail = applications_service.set_status(
         current_user_id(), application_id, request.form.get("status", "")
     )
     flash("Application status updated.", "success")
-    return redirect(url_for("employer.applicants", job_id=job_id))
+    return redirect(url_for("employer.applicants", job_id=detail["job_id"]))
 
 
 @bp.route("/employer/slots", methods=("GET",))
@@ -141,7 +138,7 @@ def create_slot():
         start = parse_iso(start_raw)
         end_iso = plus_minutes(to_iso(start), 30)
         scheduling_service.create_slot(current_user_id(), job_id, to_iso(start), end_iso)
-    except (ValidationError, ValueError) as exc:
+    except (ValidationError, ValueError, OverflowError) as exc:
         message = exc.message if isinstance(exc, ValidationError) else "Times must be ISO-8601 UTC, e.g. 2026-05-01T15:00:00Z"
         rows = scheduling_service.list_slots_for_employer(current_user_id())
         owned_jobs = jobs_service.list_employer_jobs(current_user_id())

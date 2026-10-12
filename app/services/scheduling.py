@@ -10,7 +10,7 @@ attempts produce exactly one booking; the loser gets HTTP 409 with the message
 import sqlite3
 from datetime import timedelta
 
-from app.db import get_db, transaction, translate_integrity_error
+from app.db import get_db, object_id, transaction, translate_integrity_error
 from app.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from app.timeutils import SLOT_MINUTES, is_future, parse_iso, to_iso, utc_now
 
@@ -21,7 +21,7 @@ def _validate_slot_times(start_utc: str, end_utc: str) -> tuple[str, str]:
     try:
         start = parse_iso(start_utc)
         end = parse_iso(end_utc)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         raise ValidationError("Times must be ISO-8601 UTC, e.g. 2026-05-01T15:00:00Z")
     if end <= start:
         raise ValidationError("End time must be after start time")
@@ -33,7 +33,7 @@ def _validate_slot_times(start_utc: str, end_utc: str) -> tuple[str, str]:
 def create_slot(employer_id: int, job_id: int, start_utc: str, end_utc: str) -> int:
     """Create one future 30-minute slot owned by the employer (FP-SCHED-1)."""
     db = get_db()
-    job = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    job = db.execute("SELECT * FROM jobs WHERE id = ?", (object_id(job_id),)).fetchone()
     if job is None:
         raise NotFoundError("Job not found")
     if job["employer_id"] != employer_id:
@@ -62,7 +62,7 @@ def delete_slot(employer_id: int, slot_id: int) -> None:
     backstop so a racing booking can never be cascade-deleted.
     """
     db = get_db()
-    slot = db.execute("SELECT * FROM interview_slots WHERE id = ?", (slot_id,)).fetchone()
+    slot = db.execute("SELECT * FROM interview_slots WHERE id = ?", (object_id(slot_id),)).fetchone()
     if slot is None:
         raise NotFoundError("Slot not found")
     if slot["employer_id"] != employer_id:
@@ -127,14 +127,14 @@ def book_slot(candidate_id: int, application_id: int, slot_id: int) -> int:
     """
     with transaction(immediate=True) as db:
         application = db.execute(
-            "SELECT * FROM applications WHERE id = ?", (application_id,)
+            "SELECT * FROM applications WHERE id = ?", (object_id(application_id),)
         ).fetchone()
         if application is None:
             raise NotFoundError("Application not found")
         if application["candidate_id"] != candidate_id:
             raise AuthorizationError("You cannot book with another candidate's application")
 
-        slot = db.execute("SELECT * FROM interview_slots WHERE id = ?", (slot_id,)).fetchone()
+        slot = db.execute("SELECT * FROM interview_slots WHERE id = ?", (object_id(slot_id),)).fetchone()
         if slot is None:
             raise NotFoundError("Slot not found")
 

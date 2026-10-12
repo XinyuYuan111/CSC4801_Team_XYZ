@@ -1,6 +1,6 @@
 """Candidate profiles, private resumes, and company profiles (FP-CAN-1, FP-EMP-1)."""
 
-from app.db import get_db, transaction
+from app.db import get_db, object_id, transaction
 from app.errors import AuthorizationError, NotFoundError, ValidationError
 from app.matching import parse_skills_text
 
@@ -78,7 +78,7 @@ def _check_resume_access(actor_id: int, candidate_id: int) -> None:
     if actor_id is None:
         raise AuthorizationError("Please log in")
     db = get_db()
-    target = db.execute("SELECT user_id FROM candidate_profiles WHERE user_id = ?", (candidate_id,)).fetchone()
+    target = db.execute("SELECT user_id FROM candidate_profiles WHERE user_id = ?", (object_id(candidate_id),)).fetchone()
     if target is None:
         raise NotFoundError("Candidate not found")
     if actor_id != candidate_id:

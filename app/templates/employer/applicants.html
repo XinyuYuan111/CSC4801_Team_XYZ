@@ -31,8 +31,7 @@
         <td>
           <form class="inline" method="post" action="{{ url_for('employer.set_status', application_id=row.application_id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="job_id" value="{{ job.id }}">
-            <select name="status">
+            <select id="status-{{ row.application_id }}" name="status" aria-label="Application status for {{ row.display_name }}">
               {% for status in ['Pending', 'Interviewing', 'Rejected', 'Accepted'] %}
               <option value="{{ status }}" {% if row.status == status %}selected{% endif %}>{{ status }}</option>
               {% endfor %}

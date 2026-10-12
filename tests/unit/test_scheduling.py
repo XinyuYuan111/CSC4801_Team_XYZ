@@ -13,6 +13,44 @@ from app.timeutils import plus_minutes, to_iso, utc_now
 from tests.conftest import make_future_slot_start, make_slot_end
 
 
+def test_fp_sched_2_shared_employer_availability(app, world):
+    """The iff contract allows another reference job, but never another employer."""
+    from app.services import jobs as jobs_service
+
+    ids = world()
+    ana, alice, ben = (ids["users"][key] for key in ("ana", "alice", "ben"))
+    application_id = _interview_app(app, ids, "alice", "backend")
+    start = make_future_slot_start()
+    with app.app_context():
+        other_job = jobs_service.create_job(ana, "Another role", "Description", "")
+        shared_slot = scheduling_service.create_slot(ana, other_job, start, make_slot_end(start))
+        foreign_slot = scheduling_service.create_slot(ben, ids["jobs"]["analyst"], start, make_slot_end(start))
+        assert [s["slot_id"] for s in scheduling_service.list_available_slots(ana)] == [shared_slot]
+        with pytest.raises(AuthorizationError):
+            scheduling_service.book_slot(alice, application_id, foreign_slot)
+        assert get_db().execute("SELECT COUNT(*) FROM bookings").fetchone()[0] == 0
+        booking_id = scheduling_service.book_slot(alice, application_id, shared_slot)
+        for detail in (
+            applications_service.get_application_for_candidate(alice, application_id),
+            applications_service.get_application_for_employer(ana, application_id),
+        ):
+            assert detail["booking"]["booking_id"] == booking_id
+            assert detail["job_id"] == ids["jobs"]["backend"]
+        assert scheduling_service.list_available_slots(ana) == []
+
+
+def test_fp_sched_1_datetime_overflow_is_validation_error(client, app, world):
+    ids = world()
+    ana, backend = ids["users"]["ana"], ids["jobs"]["backend"]
+    client.login("ana@test.local", "Password123!")
+    for start in ("9999-12-31T23:45:00Z", "0001-01-01T00:00:00+08:00"):
+        assert client.post("/employer/slots", {"job_id": backend, "start_utc": start}).status_code == 400
+    with app.app_context():
+        with pytest.raises(ValidationError):
+            scheduling_service.create_slot(ana, backend, "0001-01-01T00:00:00+08:00", "0001-01-01T00:30:00+08:00")
+        assert scheduling_service.list_slots_for_employer(ana) == []
+
+
 def _interview_app(app, ids, candidate_key: str, job_key: str) -> int:
     """Create an application and move it to Interviewing (job owner sets status)."""
     with app.app_context():

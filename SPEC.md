@@ -75,7 +75,10 @@ uses `check_password_hash`; unknown email and wrong password are
 indistinguishable (`401 Invalid email or password`). Password hashes are never
 returned by any code path or rendered in any template. Sessions are signed
 Flask session cookies containing `user_id`, a CSRF token, and flash messages;
-the role is loaded from the database. Logout removes `user_id`. Unauthenticated access:
+the role is loaded from the database. Logout removes `user_id`. Already logged-in
+users visiting or posting to `/register` return to their home page without
+creating another account or changing sessions; they must log out to register.
+Unauthenticated access:
 
 - `GET` of a protected page → `302` redirect to `/login` (the FP-AUTH-3
   "redirect to login" option);
@@ -105,6 +108,9 @@ returned), while `/jobs/<id>` is the intentionally shared job-detail view;
 slots are owned by the creating employer (tied to one of their jobs); bookings
 require the caller to own the application. Changing any object id in a URL or
 form must not bypass these checks — covered by `tests/unit/test_security.py`.
+Object lookups reject IDs outside SQLite's signed 64-bit INTEGER range with
+`404`, before binding them to SQL. Route authentication and role checks still
+take precedence. Status updates check ownership before validating the new status.
 
 ## API Routes or Server Actions
 
@@ -116,7 +122,7 @@ return `405`.
 | Route | Method | Who | Behavior |
 |---|---|---|---|
 | `/` | GET | public | Redirects to login when unauthenticated, otherwise to the current role's home page |
-| `/register` | GET, POST | public | Registration form; creates user + profile row and logs in |
+| `/register` | GET, POST | public | Registration form; creates user + profile row and logs in; existing sessions redirect home |
 | `/login` | GET, POST | public | Login form; `401` on bad credentials |
 | `/logout` | POST | logged in | Removes authenticated user ID from session |
 
@@ -150,7 +156,7 @@ return `405`.
 | `/jobs/<id>/edit` | GET, POST | Employer owner | Edit own posting; ownership enforced **before** rendering on both GET and POST (`403` foreign employers, `404` missing) |
 | `/jobs/<id>/delete` | POST | Employer owner | Delete; `409` if applications or slots exist |
 | `/jobs/<id>/applicants` | GET | Employer owner | Applicants sorted by score with full rows (FP-EMP-3) |
-| `/applications/<id>/status` | POST | Employer owner | Set `Pending/Interviewing/Rejected/Accepted` |
+| `/applications/<id>/status` | POST | Employer owner | Set `Pending/Interviewing/Rejected/Accepted`; redirect to the application's stored job (no submitted `job_id` needed) |
 | `/employer/slots` | GET | Employer | Own slots with booked/available/expired state |
 | `/employer/slots` | POST | Employer | Create a future 30-minute slot for one owned job (form takes start; end = start + 30 min) |
 | `/slots/<id>/delete` | POST | Employer owner | Delete unbooked slot; `409` if booked |
@@ -211,7 +217,7 @@ then case-insensitive candidate display name, then candidate id
 **Slots (FP-SCHED-1).** Exact start/end UTC instants, always exactly 30 minutes,
 always created in the future. One owner (the creating employer) and one job
 posting (so job deletion correctly reports dependent interview slots — FP-EMP-2).
-Creation rejects: malformed timestamps, end ≤ start, any duration other than 30
+Creation rejects: malformed or overflowing timestamps, end ≤ start, any duration other than 30
 minutes, non-future start, foreign/missing job (`403`/`404`). Deletion rejects a
 booked slot (`409`) and a foreign/missing slot (`403`/`404`). Availability
 listings exclude booked and past slots. The employer's management list retains
@@ -226,6 +232,13 @@ booked (`409`); and the application has no existing booking (`409`). Failures
 change neither the slot nor the application. Success links the booking to the
 application; it is visible to the candidate and the owning employer. Status
 changes never unlink a booking.
+
+Availability is shared across all postings of the same employer. A slot's
+`job_id` records its reference job at creation and remains a deletion dependency;
+it does not restrict booking eligibility to that job. A candidate interviewing
+for job A may book a slot created with reference job B when both have the same
+employer. The booking stays linked to the application for A. Enforcing equal
+job IDs would add a condition forbidden by FP-SCHED-2's **if and only if** rule.
 
 **Transaction (FP-SCHED-3).** Booking runs in a SQLite `BEGIN IMMEDIATE`
 transaction (`app/db.py::transaction(immediate=True)`), serializing concurrent

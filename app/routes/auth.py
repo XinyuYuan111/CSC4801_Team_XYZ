@@ -30,6 +30,8 @@ def home():
 
 @bp.route("/register", methods=("GET", "POST"))
 def register():
+    if current_user() is not None:
+        return redirect(url_for("auth.home"))
     if request.method == "POST":
         role = request.form.get("role", "")
         try:

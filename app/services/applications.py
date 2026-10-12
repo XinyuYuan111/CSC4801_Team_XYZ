@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from app.db import get_db, transaction, translate_integrity_error
+from app.db import get_db, object_id, transaction, translate_integrity_error
 from app.errors import AuthorizationError, NotFoundError, ValidationError
 from app.matching import match_score, sort_applicants_for_employer
 from app.timeutils import utc_now_iso
@@ -28,7 +28,7 @@ def apply_to_job(candidate_id: int, job_id: int) -> int:
     ``409 Application already submitted`` outcome instead of a 500.
     """
     db = get_db()
-    job = db.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    job = db.execute("SELECT id FROM jobs WHERE id = ?", (object_id(job_id),)).fetchone()
     if job is None:
         raise NotFoundError("Job not found")
     try:
@@ -74,7 +74,7 @@ def list_my_applications(candidate_id: int) -> list[dict]:
 def get_application_for_candidate(actor_id: int, application_id: int) -> dict:
     """One application viewed by its owning candidate (FP-CAN-3, FP-SEC-1)."""
     db = get_db()
-    row = db.execute("SELECT * FROM applications WHERE id = ?", (application_id,)).fetchone()
+    row = db.execute("SELECT * FROM applications WHERE id = ?", (object_id(application_id),)).fetchone()
     if row is None:
         raise NotFoundError("Application not found")
     if row["candidate_id"] != actor_id:
@@ -85,7 +85,7 @@ def get_application_for_candidate(actor_id: int, application_id: int) -> dict:
 def get_application_for_employer(actor_id: int, application_id: int) -> dict:
     """One application viewed by the employer who owns its job (FP-EMP-3)."""
     db = get_db()
-    row = db.execute("SELECT * FROM applications WHERE id = ?", (application_id,)).fetchone()
+    row = db.execute("SELECT * FROM applications WHERE id = ?", (object_id(application_id),)).fetchone()
     if row is None:
         raise NotFoundError("Application not found")
     job = db.execute("SELECT * FROM jobs WHERE id = ?", (row["job_id"],)).fetchone()
@@ -125,15 +125,15 @@ def _booking_for_application(db, application_id: int):
 
 def set_status(actor_id: int, application_id: int, status: str) -> dict:
     """Set an application status. Only the owning employer may (FP-EMP-3)."""
-    if status not in STATUSES:
-        raise ValidationError("Status must be Pending, Interviewing, Rejected, or Accepted")
     db = get_db()
-    row = db.execute("SELECT * FROM applications WHERE id = ?", (application_id,)).fetchone()
+    row = db.execute("SELECT * FROM applications WHERE id = ?", (object_id(application_id),)).fetchone()
     if row is None:
         raise NotFoundError("Application not found")
     job = db.execute("SELECT * FROM jobs WHERE id = ?", (row["job_id"],)).fetchone()
     if job is None or job["employer_id"] != actor_id:
         raise AuthorizationError("You do not own this application's job")
+    if status not in STATUSES:
+        raise ValidationError("Status must be Pending, Interviewing, Rejected, or Accepted")
     with transaction():
         db.execute(
             "UPDATE applications SET status = ? WHERE id = ?",
@@ -141,13 +141,13 @@ def set_status(actor_id: int, application_id: int, status: str) -> dict:
         )
     # A booking, if any, stays linked when the application leaves Interviewing
     # (FP-SCHED-2): nothing else is modified here.
-    return _application_detail(db, db.execute("SELECT * FROM applications WHERE id = ?", (application_id,)).fetchone())
+    return _application_detail(db, db.execute("SELECT * FROM applications WHERE id = ?", (object_id(application_id),)).fetchone())
 
 
 def list_applicants(employer_id: int, job_id: int) -> list[dict]:
     """Applicants for an owned job, sorted by match score (FP-EMP-3)."""
     db = get_db()
-    job = db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    job = db.execute("SELECT * FROM jobs WHERE id = ?", (object_id(job_id),)).fetchone()
     if job is None:
         raise NotFoundError("Job not found")
     if job["employer_id"] != employer_id:
@@ -159,7 +159,7 @@ def list_applicants(employer_id: int, job_id: int) -> list[dict]:
     rows = db.execute(
         """
         SELECT a.id AS application_id, a.status,
-               u.id AS candidate_id, p.display_name, p.resume_text
+               u.id AS candidate_id, p.display_name
         FROM applications a
         JOIN users u ON u.id = a.candidate_id
         JOIN candidate_profiles p ON p.user_id = u.id

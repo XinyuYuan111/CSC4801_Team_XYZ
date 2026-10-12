@@ -5,6 +5,60 @@ import pytest
 from app.errors import ConflictError
 
 
+def test_fp_auth_1_registration_preserves_existing_session(client, db):
+    assert client.register("existing@test.local", "Password123!", "Candidate", display_name="Existing").status_code == 302
+    assert client.get("/register").headers["Location"] == "/"
+    response = client.register("unwanted@test.local", "Password123!", "Employer", company_name="Unwanted")
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/"
+    assert b"existing@test.local" in client.get("/dashboard").data
+    assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
+    client.logout()
+    assert client.register("unwanted@test.local", "Password123!", "Employer", company_name="Wanted").status_code == 302
+
+
+@pytest.mark.parametrize("missing_id", [2**63 - 1, 2**63, 10**50])
+def test_fp_auth_3_oversized_object_ids(client, app, world, missing_id):
+    from app.services import applications, scheduling
+
+    ids = world()
+    alice, ana = ids["users"]["alice"], ids["users"]["ana"]
+    with app.app_context():
+        application_id = applications.apply_to_job(alice, ids["jobs"]["backend"])
+        applications.set_status(ana, application_id, "Interviewing")
+
+    # Authentication and role checks still precede object lookup.
+    assert client.get(f"/jobs/{missing_id}").status_code == 302
+    assert client.post(f"/jobs/{missing_id}/apply").status_code == 401
+    client.login("alice@test.local", "Password123!")
+    assert client.get(f"/jobs/{missing_id}/edit").status_code == 403
+    for path in (f"/jobs/{missing_id}", f"/applications/{missing_id}", f"/candidates/{missing_id}/resume"):
+        assert client.get(path).status_code == 404
+    for path, data in (
+        (f"/jobs/{missing_id}/apply", {}),
+        (f"/candidates/{missing_id}/resume", {"resume_text": "unchanged"}),
+        ("/bookings", {"application_id": missing_id, "slot_id": 1}),
+        ("/bookings", {"application_id": application_id, "slot_id": missing_id}),
+    ):
+        assert client.post(path, data).status_code == 404
+
+    client.logout()
+    client.login("ana@test.local", "Password123!")
+    for path in (f"/jobs/{missing_id}/edit", f"/jobs/{missing_id}/applicants", f"/applications/{missing_id}"):
+        assert client.get(path).status_code == 404
+    for path, data in (
+        (f"/jobs/{missing_id}/edit", {"title": "T", "description": "D"}),
+        (f"/jobs/{missing_id}/delete", {}),
+        (f"/applications/{missing_id}/status", {"status": "Accepted"}),
+        (f"/slots/{missing_id}/delete", {}),
+        ("/employer/slots", {"job_id": missing_id, "start_utc": "2035-01-01T15:00:00Z"}),
+    ):
+        assert client.post(path, data).status_code == 404
+    with app.app_context():
+        assert applications.get_application_for_candidate(alice, application_id)["status"] == "Interviewing"
+        assert scheduling.list_slots_for_employer(ana) == []
+
+
 def test_home_redirects_anonymous_visitors_to_login(client):
     response = client.get("/")
     assert response.status_code == 302

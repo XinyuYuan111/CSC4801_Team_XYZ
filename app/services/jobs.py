@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from app.db import get_db, transaction
+from app.db import get_db, object_id, transaction
 from app.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from app.matching import match_score, parse_skills_text, sort_jobs_for_candidate
 from app.timeutils import utc_now_iso
@@ -18,7 +18,7 @@ def _job_skills(db, job_id: int) -> list[str]:
 
 
 def _load_job(db, job_id: int):
-    return db.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    return db.execute("SELECT * FROM jobs WHERE id = ?", (object_id(job_id),)).fetchone()
 
 
 def create_job(employer_id: int, title: str, description: str, skills_text: str) -> int:

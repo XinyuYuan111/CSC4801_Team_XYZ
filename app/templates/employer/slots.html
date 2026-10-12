@@ -3,13 +3,14 @@
 {% block content %}
 <h1>Interview availability slots</h1>
 <p class="muted">All times are UTC. Each slot is exactly 30 minutes and must be in the future. Booked slots cannot be deleted and are never shown to candidates as available.</p>
+<p class="muted">Availability is shared across your job postings. The reference job records where a slot was created; candidates interviewing for any of your jobs can book it.</p>
 
 <div class="card">
   <h2 style="margin-top:0">Create a slot</h2>
   {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
   <form method="post" action="{{ url_for('employer.create_slot') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="job_id">Job posting</label>
+    <label for="job_id">Reference job posting</label>
     <select id="job_id" name="job_id" required>
       {% for job in jobs %}
       <option value="{{ job.id }}">{{ job.title }}</option>
@@ -27,7 +28,7 @@
   <h2 style="margin-top:0">My slots</h2>
   <table>
     <thead>
-      <tr><th>Job</th><th>Start (UTC)</th><th>End (UTC)</th><th>State</th><th></th></tr>
+      <tr><th>Reference job</th><th>Start (UTC)</th><th>End (UTC)</th><th>State</th><th></th></tr>
     </thead>
     <tbody>
       {% for row in slots %}
