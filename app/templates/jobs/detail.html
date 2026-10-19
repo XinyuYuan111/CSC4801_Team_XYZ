@@ -29,7 +29,7 @@
       <a class="btn secondary" href="{{ url_for('employer.applicants', job_id=job.id) }}">View applicants</a>
       <a class="btn secondary" href="{{ url_for('employer.jobs') }}">Back to my postings</a>
     {% else %}
-      <a class="btn secondary" href="{{ url_for('candidate.dashboard') }}">Back to jobs</a>
+      <a class="btn secondary" href="{{ url_for('employer.jobs') }}">Back to my postings</a>
     {% endif %}
   </div>
 </div>

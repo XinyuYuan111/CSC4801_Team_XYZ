@@ -9,6 +9,8 @@ import secrets
 from pathlib import Path
 
 from flask import Flask, g, render_template, request, session
+from werkzeug.routing import IntegerConverter
+from werkzeug.routing import ValidationError as RoutingValidationError
 
 from app import db as db_module
 from app.errors import AppError, AuthenticationError, AuthorizationError
@@ -18,8 +20,27 @@ from app.timeutils import format_display
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+class SafeIntegerConverter(IntegerConverter):
+    """Report an integer path segment that cannot be converted as a missing route.
+
+    CPython 3.11+ caps int<->str conversion at 4300 digits. The default
+    ``<int:...>`` converter lets that ``ValueError`` escape while matching the
+    URL, which Flask surfaces as a 500. Re-raising it as Werkzeug's routing
+    ``ValidationError`` makes the URL unmatched (404), so an id that cannot
+    exist is reported as a missing object (FP-AUTH-3) instead of an error.
+    """
+
+    def to_python(self, value: str):
+        try:
+            return super().to_python(value)
+        except ValueError as exc:
+            raise RoutingValidationError() from exc
+
+
 def create_app(test_config=None) -> Flask:
     app = Flask(__name__)
+    # Bound the ``<int:...>`` converter before any blueprint rule is added.
+    app.url_map.converters["int"] = SafeIntegerConverter
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
         DATABASE=os.environ.get("DATABASE") or str(BASE_DIR / "data" / "app.sqlite3"),

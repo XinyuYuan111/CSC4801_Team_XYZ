@@ -59,6 +59,21 @@ def test_fp_auth_3_oversized_object_ids(client, app, world, missing_id):
         assert scheduling.list_slots_for_employer(ana) == []
 
 
+def test_fp_auth_3_overlong_digit_id_is_404_not_500(client, world):
+    """An id longer than the int<->str limit must read as a missing object (404).
+
+    CPython 3.11+ refuses to convert strings longer than 4300 digits to int, so
+    the URL adapter must treat such an id as an unmatched route rather than
+    letting the converter's ValueError escape as a 500 (FP-AUTH-3).
+    """
+    world()
+    client.login("alice@test.local", "Password123!")
+    overlong = "9" * 4301
+    assert client.get("/jobs/" + overlong).status_code == 404
+    assert client.get("/applications/" + overlong).status_code == 404
+    assert client.get("/candidates/" + overlong + "/resume").status_code == 404
+
+
 def test_home_redirects_anonymous_visitors_to_login(client):
     response = client.get("/")
     assert response.status_code == 302
