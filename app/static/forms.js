@@ -24,6 +24,7 @@ function validationMessage(field) {
   if (field.validity.customError) return field.validationMessage;
   if (field.type === "email" && (field.validity.typeMismatch || field.validity.badInput)) return "Enter a valid email address.";
   if (field.validity.badInput) return "Enter a valid date and time.";
+  if (field.validity.rangeUnderflow && field.type === "date") return "Choose a future start time (UTC).";
   if (field.validity.valueMissing) return "This field is required.";
   if (field.validity.tooShort) return `Use at least ${field.minLength} characters.`;
   if (field.autocomplete === "new-password" && /^ +$/.test(field.value)) return "A password cannot contain only spaces.";

@@ -16,15 +16,40 @@
       <option value="{{ job.id }}">{{ job.title }}</option>
       {% endfor %}
     </select>
-    <label for="start_utc">Start time (UTC, 30-minute slot)</label>
-    <input id="start_utc" name="start_utc" type="datetime-local" required>
+    <div id="slot-start-fallback">
+      <label for="start_utc">Start time (UTC, 30-minute slot)</label>
+      <input id="start_utc" name="start_utc" type="datetime-local" min="{{ min_start }}" required>
+    </div>
+    <fieldset id="slot-picker" class="slot-picker" data-now-ms="{{ now_ms }}" hidden disabled>
+      <legend>Start time (UTC)</legend>
+      <div class="slot-parts">
+        <div>
+          <label for="slot-date">Date</label>
+          <input id="slot-date" type="date" min="{{ min_start[:10] }}" required>
+        </div>
+        <div>
+          <label for="slot-hour">Hour</label>
+          <select id="slot-hour" required>
+            <option value="">Hour</option>
+            {% for hour in range(24) %}<option>{{ '%02d' | format(hour) }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="slot-minute">Minute</label>
+          <select id="slot-minute" required>
+            <option value="">Minute</option>
+            {% for minute in range(60) %}<option>{{ '%02d' | format(minute) }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+    </fieldset>
     <div class="actions">
       <button class="btn" type="submit">Create slot</button>
     </div>
   </form>
 </div>
 
-<div class="card">
+<div class="card table-card">
   <h2 style="margin-top:0">My slots</h2>
   <table>
     <thead>
@@ -33,7 +58,7 @@
     <tbody>
       {% for row in slots %}
       <tr>
-        <td>{{ row.title }}</td>
+        <td class="name-cell" title="{{ row.title }}">{{ row.title }}</td>
         <td>{{ row.start_utc | utc_display }}</td>
         <td>{{ row.end_utc | utc_display }}</td>
         <td>
@@ -60,4 +85,5 @@
     </tbody>
   </table>
 </div>
+<script defer src="{{ url_for('static', filename='slot-picker.js') }}"></script>
 {% endblock %}

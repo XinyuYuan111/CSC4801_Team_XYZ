@@ -1,7 +1,7 @@
 """Unit tests for FP-SCHED-1..3: availability slots, booking eligibility, conflict contract."""
 
 import sqlite3
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -11,6 +11,21 @@ from app.services import applications as applications_service
 from app.services import scheduling as scheduling_service
 from app.timeutils import plus_minutes, to_iso, utc_now
 from tests.conftest import make_future_slot_start, make_slot_end
+
+
+@pytest.mark.parametrize(("clock", "first_start"), [
+    ("2030-05-01T10:23:00", "2030-05-01T10:24"),
+    ("2030-05-01T23:59:58", "2030-05-02T00:00"),
+])
+def test_slot_picker_starts_at_next_utc_minute(client, monkeypatch, clock, first_start):
+    now = datetime.fromisoformat(clock).replace(tzinfo=timezone.utc)
+    monkeypatch.setattr("app.routes.employer.utc_now", lambda: now)
+    client.register("owner@time.test", "Password123!", "Employer", company_name="Example")
+    for response in (client.get("/employer/slots"), client.post("/employer/slots", {})):
+        html = response.get_data(as_text=True)
+        assert f'type="datetime-local" min="{first_start}"' in html
+        assert f'type="date" min="{first_start[:10]}"' in html
+        assert f'data-now-ms="{int(now.timestamp() * 1000)}"' in html
 
 
 def test_fp_sched_2_shared_employer_availability(app, world):

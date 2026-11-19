@@ -90,8 +90,8 @@ def test_two_candidates_and_employer_hire_and_book_journey(app):
     dash2 = _text(cand2.get("/dashboard"))
     assert "Backend Engineer" in dash1 and "Acme" in dash1
     # score column precedes the title cell in each row
-    assert re.search(r'<td class="score">100</td>\s*<td>Backend Engineer</td>', dash1), dash1
-    assert re.search(r'<td class="score">50</td>\s*<td>Backend Engineer</td>', dash2), dash2
+    assert re.search(r'<td class="score"[^>]*>100</td>\s*<td\b[^>]*>Backend Engineer</td>', dash1), dash1
+    assert re.search(r'<td class="score"[^>]*>50</td>\s*<td\b[^>]*>Backend Engineer</td>', dash2), dash2
 
     # Both apply (FP-CAN-3); duplicate apply is rejected.
     assert cand1.get(f"/jobs/{job_id}").status_code == 200
@@ -151,7 +151,7 @@ def test_dashboard_ranks_all_jobs_and_links_descriptions(app):
 
     html = _text(cand.get("/dashboard"))
     # Scores: AAA High 100, MMM Mid 50, ZZZ Low 0 — descending.
-    order = re.findall(r'<td class="score">(\d+)</td>\s*<td>([^<]+)</td>', html)
+    order = re.findall(r'<td class="score"[^>]*>(\d+)</td>\s*<td\b[^>]*>([^<]+)</td>', html)
     assert order == [("100", "AAA High"), ("50", "MMM Mid"), ("0", "ZZZ Low")], order
     # Every row offers a way to view the description (FP-CAN-2).
     assert html.count("View description") == 3

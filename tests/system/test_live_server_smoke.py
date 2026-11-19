@@ -155,8 +155,8 @@ def test_live_seeded_demo_accounts_and_full_smoke(live_server):
     assert status == 200
     # FP-DOC-3 / FP-MATCH-1 example rows appear in the live dashboard.
     assert "Backend Engineer" in body
-    assert re.search(r'<td class="score">100</td>\s*<td>Backend Engineer</td>', body)
-    assert re.search(r'<td class="score">0</td>\s*<td>Frontend Engineer</td>', body)
+    assert re.search(r'<td class="score"[^>]*>100</td>\s*<td\b[^>]*>Backend Engineer</td>', body)
+    assert re.search(r'<td class="score"[^>]*>0</td>\s*<td\b[^>]*>Frontend Engineer</td>', body)
 
     # Alice's application detail shows Interviewing + a bookable slot.
     status, body = browser.get("/applications")

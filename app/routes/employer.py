@@ -1,5 +1,7 @@
 """Employer-facing routes: company, jobs, applicants, slots (FP-EMP-1..3, FP-SCHED-1)."""
 
+from datetime import timedelta
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.errors import ValidationError
@@ -8,7 +10,7 @@ from app.services import applications as applications_service
 from app.services import jobs as jobs_service
 from app.services import profiles as profiles_service
 from app.services import scheduling as scheduling_service
-from app.timeutils import parse_iso, plus_minutes, to_iso
+from app.timeutils import parse_iso, plus_minutes, to_iso, utc_now
 
 bp = Blueprint("employer", __name__)
 
@@ -118,9 +120,18 @@ def set_status(application_id: int):
 @bp.route("/employer/slots", methods=("GET",))
 @role_required("Employer")
 def slots():
+    return _render_slots()
+
+
+def _render_slots(error=None):
     rows = scheduling_service.list_slots_for_employer(current_user_id())
     owned_jobs = jobs_service.list_employer_jobs(current_user_id())
-    return render_template("employer/slots.html", slots=rows, jobs=owned_jobs, error=None)
+    now = utc_now()
+    return render_template(
+        "employer/slots.html", slots=rows, jobs=owned_jobs, error=error,
+        now_ms=int(now.timestamp() * 1000),
+        min_start=(now + timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M"),
+    )
 
 
 @bp.route("/employer/slots", methods=("POST",))
@@ -137,11 +148,7 @@ def create_slot():
         scheduling_service.create_slot(current_user_id(), job_id, to_iso(start), end_iso)
     except (ValidationError, ValueError, OverflowError) as exc:
         message = exc.message if isinstance(exc, ValidationError) else "Times must be ISO-8601 UTC, e.g. 2026-05-01T15:00:00Z"
-        rows = scheduling_service.list_slots_for_employer(current_user_id())
-        owned_jobs = jobs_service.list_employer_jobs(current_user_id())
-        return render_template(
-            "employer/slots.html", slots=rows, jobs=owned_jobs, error=message
-        ), 400
+        return _render_slots(message), 400
     flash("Slot created.", "success")
     return redirect(url_for("employer.slots"))
 

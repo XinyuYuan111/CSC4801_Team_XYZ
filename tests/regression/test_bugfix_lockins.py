@@ -203,5 +203,5 @@ def test_regression_seed_skills_match_documented_examples(app):
     b = Browser(app)
     assert b.login("alice@demo.local", "DemoPass123!").status_code == 302
     html = _text(b.get("/dashboard"))
-    assert re.search(r'<td class="score">100</td>\s*<td>Backend Engineer</td>', html)
+    assert re.search(r'<td class="score"[^>]*>100</td>\s*<td\b[^>]*>Backend Engineer</td>', html)
     assert "python" in html.lower() and "sql" in html.lower()

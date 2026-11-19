@@ -2,7 +2,7 @@
 {% block title %}My Applications · TalentMatch{% endblock %}
 {% block content %}
 <h1>My applications</h1>
-<div class="card">
+<div class="card table-card">
   <table>
     <thead>
       <tr><th>Job</th><th>Company</th><th>Status</th><th>Interview booking</th><th></th></tr>
@@ -10,8 +10,8 @@
     <tbody>
       {% for row in applications %}
       <tr>
-        <td>{{ row.title }}</td>
-        <td>{{ row.company_name }}</td>
+        <td class="name-cell" title="{{ row.title }}">{{ row.title }}</td>
+        <td class="name-cell" title="{{ row.company_name }}">{{ row.company_name }}</td>
         <td>{{ row.status }}</td>
         <td>
           {% if row.booking %}

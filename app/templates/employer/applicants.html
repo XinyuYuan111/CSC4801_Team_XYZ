@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Applicants for {{ job.title }}</h1>
 <p class="muted">Sorted by match score (highest first). All times UTC.</p>
-<div class="card">
+<div class="card table-card">
   <table>
     <thead>
       <tr><th>Match</th><th>Candidate</th><th>Skills</th><th>Status</th><th>Interview booking</th><th>Set status</th></tr>
@@ -12,7 +12,7 @@
       {% for row in applicants %}
       <tr>
         <td class="score">{{ row.score }}</td>
-        <td>{{ row.display_name }} <span class="muted">#{{ row.candidate_id }}</span></td>
+        <td class="name-cell"><div class="candidate-identity"><span class="candidate-name" title="{{ row.display_name }}">{{ row.display_name }}</span> <span class="muted">#{{ row.candidate_id }}</span></div></td>
         <td>
           {% if row.skills %}
             {% for skill in row.skills %}<span class="pill">{{ skill }}</span>{% endfor %}

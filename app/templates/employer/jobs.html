@@ -2,7 +2,7 @@
 {% block title %}My Job Postings · TalentMatch{% endblock %}
 {% block content %}
 <h1>My job postings</h1>
-<div class="card">
+<div class="card table-card">
   <div class="actions" style="margin-top:0">
     <a class="btn" href="{{ url_for('employer.new_job') }}">Create a job posting</a>
   </div>
@@ -13,7 +13,7 @@
     <tbody>
       {% for row in jobs %}
       <tr>
-        <td>{{ row.title }}</td>
+        <td class="name-cell" title="{{ row.title }}">{{ row.title }}</td>
         <td>
           {% if row.required_skills %}
             {% for skill in row.required_skills %}<span class="pill">{{ skill }}</span>{% endfor %}

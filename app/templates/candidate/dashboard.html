@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Job recommendations</h1>
 <p class="muted">All open postings, sorted by your match score (highest first).</p>
-<div class="card">
+<div class="card table-card recommendations">
   <table>
     <thead>
       <tr><th>Match</th><th>Title</th><th>Company</th><th>Required skills</th><th></th></tr>
@@ -11,10 +11,10 @@
     <tbody>
       {% for row in jobs %}
       <tr>
-        <td class="score">{{ row.score }}</td>
-        <td>{{ row.title }}</td>
-        <td>{{ row.company_name }}</td>
-        <td>
+        <td class="score" data-label="Match">{{ row.score }}</td>
+        <td class="name-cell" data-label="Title" title="{{ row.title }}">{{ row.title }}</td>
+        <td class="name-cell" data-label="Company" title="{{ row.company_name }}">{{ row.company_name }}</td>
+        <td data-label="Required skills">
           {% if row.required_skills %}
             {% for skill in row.required_skills %}<span class="pill">{{ skill }}</span>{% endfor %}
           {% else %}
