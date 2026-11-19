@@ -5,7 +5,7 @@ from datetime import timedelta
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.errors import ValidationError
-from app.routes.helpers import current_user_id, role_required
+from app.routes.helpers import current_user_id, role_required, submitted_skill_tags
 from app.services import applications as applications_service
 from app.services import jobs as jobs_service
 from app.services import profiles as profiles_service
@@ -50,15 +50,17 @@ def jobs():
 @role_required("Employer")
 def new_job():
     if request.method == "POST":
+        tags = submitted_skill_tags()
         try:
             jobs_service.create_job(
                 current_user_id(),
                 title=request.form.get("title", ""),
                 description=request.form.get("description", ""),
-                skills_text=request.form.get("skills", ""),
+                skills_text=request.form.get("skill_draft", ""),
+                skill_items=tags,
             )
         except ValidationError as exc:
-            return render_template("employer/job_form.html", job=None, error=exc.message), exc.status
+            return render_template("employer/job_form.html", job=None, submitted_tags=tags, error=exc.message), exc.status
         flash("Job created.", "success")
         return redirect(url_for("employer.jobs"))
     return render_template("employer/job_form.html", job=None, error=None)
@@ -68,18 +70,21 @@ def new_job():
 @role_required("Employer")
 def edit_job(job_id: int):
     if request.method == "POST":
+        tags = submitted_skill_tags()
         try:
             jobs_service.update_job(
                 current_user_id(),
                 job_id,
                 title=request.form.get("title", ""),
                 description=request.form.get("description", ""),
-                skills_text=request.form.get("skills", ""),
+                skills_text=request.form.get("skill_draft", ""),
+                skill_items=tags,
             )
         except ValidationError as exc:
             return render_template(
                 "employer/job_form.html",
                 job=jobs_service.get_owned_job(current_user_id(), job_id),
+                submitted_tags=tags,
                 error=exc.message,
             ), exc.status
         flash("Job updated.", "success")

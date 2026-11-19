@@ -42,17 +42,46 @@ def test_invalid_job_form_retains_draft(client, db, editing):
     if editing:
         assert client.post(url, {"title": "Current", "description": "Saved", "skills": "Go"}).status_code == 302
         url = "/jobs/1/edit"
-    draft = {"title": " ", "description": "\nNew <role> & team", "skills": "Go, SQL"}
+    draft = {"title": " ", "description": "\nNew <role> & team", "skill": ["C++", ".NET"], "skill_draft": "Go, SQL"}
     response = client.post(url, draft)
     assert response.status_code == 400
     assert _textarea_value(response, "description") == draft["description"]
-    assert _textarea_value(response, "skills") == draft["skills"]
+    assert _textarea_value(response, "skill_draft") == draft["skill_draft"]
+    for tag in draft["skill"]:
+        assert f'name="skill" value="{tag}"' in response.get_data(as_text=True)
     if editing:
         assert jobs_service.get_job(1)["description"] == "Saved"
     else:
         assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
     assert client.post(url, {**draft, "title": "Corrected"}).status_code == 302
-    assert jobs_service.get_job(1)["required_skills"] == ["go", "sql"]
+    assert jobs_service.get_job(1)["required_skills"] == [".net", "c++", "go, sql"]
+
+
+def test_profile_and_job_skill_tags_feed_matching(client, db):
+    client.register("skills@test.local", "Password123!", "Candidate", display_name="Candidate")
+    candidate = db.execute("SELECT id FROM users WHERE email = ?", ("skills@test.local",)).fetchone()[0]
+    # A tag saved by the older editor may contain a full-width comma.
+    draft = {"display_name": " ", "skill": ["old，name", "Node.js", "C++"],
+             "skill_draft": "Machine Learning，SQL\r\nC++, .NET"}
+    rejected = client.post("/profile", draft)
+    assert rejected.status_code == 400
+    assert 'name="skill" value="old，name"' in rejected.get_data(as_text=True)
+    assert _textarea_value(rejected, "skill_draft") == draft["skill_draft"].replace("\r\n", "\n")
+    assert client.post("/profile", {**draft, "display_name": "Candidate"}).status_code == 302
+    assert profiles_service.get_candidate_profile(candidate)["skills"] == [
+        "c++", "c++, .net", "machine learning，sql", "node.js", "old，name",
+    ]
+    client.logout()
+    client.register("jobs@test.local", "Password123!", "Employer", company_name="Company")
+    job = {"title": "Developer", "description": "Build applications."}
+    assert client.post("/employer/jobs/new", {**job, "skill": ["C++", "Node.js"], "skill_draft": "machine learning，SQL"}).status_code == 302
+    assert jobs_service.list_jobs_with_scores(candidate)[0]["score"] == 100
+    assert client.post("/jobs/1/edit", {**job, "skill_draft": "c++\nsql，python. sql"}).status_code == 302
+    assert jobs_service.get_job(1)["required_skills"] == ["c++", "sql，python. sql"]
+    assert jobs_service.list_jobs_with_scores(candidate)[0]["score"] == 50
+    assert client.post("/jobs/1/edit", job).status_code == 302
+    assert jobs_service.get_job(1)["required_skills"] == []
+    assert jobs_service.list_jobs_with_scores(candidate)[0]["score"] == 100
 
 
 def test_applicants_with_same_name_have_distinct_visible_ids(client, db, world):

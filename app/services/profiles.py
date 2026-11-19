@@ -1,5 +1,7 @@
 """Candidate profiles, private resumes, and company profiles (FP-CAN-1, FP-EMP-1)."""
 
+from collections.abc import Sequence
+
 from app.db import get_db, object_id, transaction
 from app.errors import AuthorizationError, NotFoundError, ValidationError
 from app.matching import parse_skills_text
@@ -25,7 +27,9 @@ def get_candidate_profile(candidate_id: int) -> dict:
     return {"user_id": row["user_id"], "display_name": row["display_name"], "resume_text": row["resume_text"], "skills": skills}
 
 
-def update_candidate_profile(candidate_id: int, display_name: str, skills_text: str) -> dict:
+def update_candidate_profile(
+    candidate_id: int, display_name: str, skills_text: str, *, skill_items: Sequence[str] | None = None,
+) -> dict:
     """Update the caller's own display name and technical skills.
 
     Skills are stored normalized (trimmed, lowercased, deduplicated) in
@@ -34,7 +38,7 @@ def update_candidate_profile(candidate_id: int, display_name: str, skills_text: 
     display_name = (display_name or "").strip()
     if not display_name:
         raise ValidationError("Display name is required")
-    skills = parse_skills_text(skills_text or "")
+    skills = parse_skills_text(skills_text, skill_items)
     db = get_db()
     exists = db.execute("SELECT 1 FROM candidate_profiles WHERE user_id = ?", (candidate_id,)).fetchone()
     if exists is None:

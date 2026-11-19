@@ -12,6 +12,7 @@ values, drop duplicates. With ``C`` and ``R`` the resulting sets::
 The result is an integer in [0, 100].
 """
 
+import re
 from typing import Iterable, Sequence
 
 
@@ -27,14 +28,11 @@ def normalize_skills(raw: Iterable[str]) -> list[str]:
     return skills
 
 
-def parse_skills_text(text: str) -> list[str]:
-    """Parse a comma/newline separated skills field into normalized skills."""
-    if not text:
-        return []
-    parts: list[str] = []
-    for line in text.replace("\n", ",").split(","):
-        parts.append(line)
-    return normalize_skills(parts)
+def parse_skills_text(text: str, skill_items: Iterable[str] | None = None) -> list[str]:
+    """The tag editor sends one skill per line. Older callers send a delimited list."""
+    if skill_items is None:
+        return normalize_skills(re.split(r"[,，\r\n]", text or ""))
+    return normalize_skills([*skill_items, *re.split(r"[\r\n]", text or "")])
 
 
 def match_score(candidate_skills: Iterable[str], required_skills: Iterable[str]) -> int:

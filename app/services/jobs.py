@@ -1,6 +1,7 @@
 """Job postings: CRUD, ownership rules, and deletion conflicts (FP-EMP-2, FP-CAN-2)."""
 
 import sqlite3
+from collections.abc import Sequence
 
 from app.db import get_db, object_id, transaction
 from app.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
@@ -21,14 +22,16 @@ def _load_job(db, job_id: int):
     return db.execute("SELECT * FROM jobs WHERE id = ?", (object_id(job_id),)).fetchone()
 
 
-def create_job(employer_id: int, title: str, description: str, skills_text: str) -> int:
+def create_job(
+    employer_id: int, title: str, description: str, skills_text: str, *, skill_items: Sequence[str] | None = None,
+) -> int:
     title = (title or "").strip()
     description = (description or "").strip()
     if not title:
         raise ValidationError("Job title is required")
     if not description:
         raise ValidationError("Job description is required")
-    skills = parse_skills_text(skills_text or "")  # empty list is allowed
+    skills = parse_skills_text(skills_text, skill_items)
     db = get_db()
     with transaction():
         cur = db.execute(
@@ -43,10 +46,12 @@ def create_job(employer_id: int, title: str, description: str, skills_text: str)
     return job_id
 
 
-def update_job(actor_id: int, job_id: int, title: str, description: str, skills_text: str) -> dict:
+def update_job(
+    actor_id: int, job_id: int, title: str, description: str, skills_text: str, *, skill_items: Sequence[str] | None = None,
+) -> dict:
     title = (title or "").strip()
     description = (description or "").strip()
-    skills = parse_skills_text(skills_text or "")
+    skills = parse_skills_text(skills_text, skill_items)
     with transaction(immediate=True) as db:
         _require_job_owner(db, actor_id, job_id)
         if not title:

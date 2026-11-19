@@ -5,6 +5,12 @@ from functools import wraps
 from flask import g, redirect, request, session, url_for
 
 from app.errors import AuthenticationError, AuthorizationError
+from app.matching import parse_skills_text
+
+
+def submitted_skill_tags() -> list[str]:
+    """Keep named tags intact and accept the older comma-separated form field."""
+    return request.form.getlist("skill") + parse_skills_text(request.form.get("skills", ""))
 
 
 def current_user() -> dict | None:

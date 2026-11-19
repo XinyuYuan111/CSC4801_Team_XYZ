@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "skill_editor.html" import skill_editor with context %}
 {% block title %}{{ 'Edit job' if job else 'New job' }} · TalentMatch{% endblock %}
 {% block content %}
 <h1>{{ 'Edit job posting' if job else 'Create a job posting' }}</h1>
@@ -11,9 +12,7 @@
     <label for="description">Description</label>
     <textarea id="description" name="description" required>
 {{ request.form.get('description', job.description if job else '') }}</textarea>
-    <label for="skills">Required skills (comma separated; may be empty)</label>
-    <textarea id="skills" name="skills" style="min-height:4.5rem">
-{{ request.form.get('skills', (job.required_skills | join(', ')) if job else '') }}</textarea>
+    {{ skill_editor("Required skills", job.required_skills if job else []) }}
     <div class="actions">
       <button class="btn" type="submit">{{ 'Save changes' if job else 'Create job' }}</button>
       <a class="btn secondary" href="{{ url_for('employer.jobs') }}">Cancel</a>

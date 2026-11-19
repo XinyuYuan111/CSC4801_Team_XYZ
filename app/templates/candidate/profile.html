@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "skill_editor.html" import skill_editor with context %}
 {% block title %}My Profile · TalentMatch{% endblock %}
 {% block content %}
 <h1>My profile</h1>
@@ -7,9 +8,8 @@
   <form method="post" action="{{ url_for('candidate.profile') }}" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="display_name">Display name</label>
-    <input id="display_name" name="display_name" type="text" value="{{ profile.display_name }}" required>
-    <label for="skills">Technical skills (comma separated — used for match scores)</label>
-    <textarea id="skills" name="skills">{{ profile.skills | join(', ') }}</textarea>
+    <input id="display_name" name="display_name" type="text" value="{{ request.form.get('display_name', profile.display_name) }}" required>
+    {{ skill_editor("Technical skills", profile.skills) }}
     <div class="actions">
       <button class="btn" type="submit">Save profile</button>
     </div>

@@ -3,7 +3,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.errors import ValidationError
-from app.routes.helpers import current_user, current_user_id, login_required, role_required
+from app.routes.helpers import current_user, current_user_id, login_required, role_required, submitted_skill_tags
 from app.services import applications as applications_service
 from app.services import jobs as jobs_service
 from app.services import profiles as profiles_service
@@ -24,16 +24,19 @@ def dashboard():
 def profile():
     user_id = current_user_id()
     if request.method == "POST":
+        tags = submitted_skill_tags()
         try:
             profiles_service.update_candidate_profile(
                 user_id,
                 display_name=request.form.get("display_name", ""),
-                skills_text=request.form.get("skills", ""),
+                skills_text=request.form.get("skill_draft", ""),
+                skill_items=tags,
             )
         except ValidationError as exc:
             return render_template(
                 "candidate/profile.html",
                 profile=profiles_service.get_candidate_profile(user_id),
+                submitted_tags=tags,
                 error=exc.message,
             ), exc.status
         flash("Profile updated.", "success")

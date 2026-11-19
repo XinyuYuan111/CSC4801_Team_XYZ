@@ -198,8 +198,11 @@ linked and the slot remains unavailable.
 
 ## Matching Algorithm and Skill Storage
 
-**Skill storage.** Free-text input (`Python, SQL`) is split on commas/newlines
-and normalized: trim whitespace, lowercase, drop empties, drop duplicates
+**Skill storage.** Candidates and employers add removable skill tags with Enter or
+the Add skill button. Multiline input adds one skill per line. Commas, periods,
+and spaces within a skill name are preserved. A job may have no required skills. Saving
+includes the final entry still in the input. Existing tags are submitted individually.
+The server trims whitespace, lowercases names, and drops empty values and duplicates
 (`app/matching.py::parse_skills_text` / `normalize_skills`). Normalized skills
 are stored one per row in `candidate_skills` and `job_skills` (PK-deduplicated)
 so the matcher reads sets directly.

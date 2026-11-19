@@ -1,0 +1,17 @@
+{% macro skill_editor(label, saved_skills) %}
+<div class="skill-editor">
+  <label for="skills">{{ label }}</label>
+  <div class="skill-entry">
+    <textarea id="skills" name="skill_draft" rows="1" aria-describedby="skill-help">
+{{ request.form.get('skill_draft', '') }}</textarea>
+    <button id="add-skill" class="btn secondary" type="button" hidden>Add skill</button>
+  </div>
+  <p id="skill-help" class="muted field-help">Enter one skill per line. Uncheck a saved skill to remove it.</p>
+  <ul id="skill-tags" aria-label="{{ label }}">
+    {% for skill in submitted_tags | default(saved_skills) %}
+      <li><label><input type="checkbox" name="skill" value="{{ skill }}" aria-label="Keep {{ skill }}" checked> {{ skill }}</label></li>
+    {% endfor %}
+  </ul>
+</div>
+<script defer src="{{ url_for('static', filename='skill-editor.js') }}"></script>
+{% endmacro %}

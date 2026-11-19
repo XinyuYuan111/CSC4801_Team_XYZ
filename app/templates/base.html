@@ -69,6 +69,15 @@
     #registration:has(#role-candidate:checked) [data-role="Employer"],
     #registration:has(#role-employer:checked) [data-role="Candidate"] { display:none; }
     .field-help { margin:0.35rem 0; font-size:0.9rem; }
+    .skill-entry { display:flex; gap:0.5rem; align-items:flex-start; }
+    .skill-entry textarea { flex:1; min-width:0; min-height:0; resize:vertical; }
+    .skill-entry button { flex:none; }
+    .skill-entry [hidden] { display:none; }
+    #skill-tags { display:flex; flex-wrap:wrap; gap:0.4rem; list-style:none; padding:0; margin:0; }
+    #skill-tags li { max-width:100%; }
+    .skill-tag { display:flex; align-items:center; gap:0.45rem; max-width:100%; padding:0.25rem 0.65rem; border:0; border-radius:1rem; background:#e8edf5; color:var(--ink); font:inherit; cursor:pointer; }
+    .skill-tag:hover { background:#d7e2f4; }
+    .skill-tag span:first-child { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
     .delete-job { display:inline-block; vertical-align:top; }
     .delete-job:not([open]) .when-open, .delete-job[open] .when-closed { display:none; }
   </style>
