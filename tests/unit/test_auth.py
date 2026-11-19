@@ -248,6 +248,49 @@ def test_fp_auth_1_invalid_registration(client, db):
     assert count == 1
 
 
+@pytest.mark.parametrize("password", [
+    "         ", "ab\tcd123", "abc\n12345", "abc\x7f12345", "a\u4e2db123456", "eight\uff01chars",
+])
+def test_registration_rejects_unsupported_passwords(client, db, password):
+    response = client.register("hr@jobs.test", password, "Employer", company_name="Example Co")
+    assert response.status_code == 400
+    error = b"A password cannot contain only spaces." if password.isspace() else b"Use only English letters"
+    assert b'role="alert">' + error in response.data
+    assert b'value="Employer" checked' in response.data
+    assert b'value="Example Co"' in response.data
+    assert b'value="hr@jobs.test"' in response.data
+    assert not db.execute("SELECT id FROM users").fetchall()
+
+
+def test_registration_preserves_all_printable_ascii_in_password(client):
+    # Both ends contain a space. Every visible ASCII symbol is used literally.
+    password = "".join(chr(n) for n in range(32, 127)) + " "
+    email = "cand+jobs@demo.local"
+    assert client.register(email, password, "Candidate", display_name="Candidate").status_code == 302
+    client.logout()
+    assert client.login(email, password.strip()).status_code == 401
+    assert client.login(email, password).status_code == 302
+
+
+def test_login_accepts_unicode_password_created_before_the_policy(client, db):
+    from app.security import hash_password
+
+    email = "legacy@demo.local"
+    assert client.register(email, "Initial password", "Candidate", display_name="Legacy").status_code == 302
+    client.logout()
+    old_password = "previous \u5bc6\u7801"
+    db.execute("UPDATE users SET password_hash = ? WHERE email = ?", (hash_password(old_password), email))
+    assert client.login(email, old_password).status_code == 302
+
+
+@pytest.mark.parametrize("email", ["one@@example.org", "one@example..org", "one;two@example.org"])
+def test_malformed_email_rejected_when_posted_directly(client, db, email):
+    response = client.register(email, "Valid password", "Candidate", display_name="Candidate")
+    assert response.status_code == 400
+    assert b"Enter a valid email address" in response.data
+    assert not db.execute("SELECT id FROM users").fetchall()
+
+
 def test_fp_auth_2_salted_hash_and_password_verification(client, app, db):
     response = client.register("hash@example.com", "Password123!", "Candidate", display_name="Hash")
     assert response.status_code == 302

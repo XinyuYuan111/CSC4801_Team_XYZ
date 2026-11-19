@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}TalentMatch{% endblock %}</title>
+  <script defer src="{{ url_for('static', filename='forms.js') }}"></script>
   <style>
     :root { --ink:#1a2332; --muted:#5b6b80; --line:#d7dee8; --bg:#f4f6fa; --card:#ffffff; --accent:#2456c4; --accent-ink:#ffffff; --ok:#1d7a4c; --bad:#b3261e; }
     * { box-sizing: border-box; }
@@ -41,6 +42,14 @@
     form.inline { display:inline; }
     .actions { display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center; margin-top:0.9rem; }
     .desc { white-space:pre-wrap; }
+    .account-type { border:0; margin:0; padding:0; }
+    .account-type legend { font-weight:600; padding:0; }
+    .account-type label { display:inline-block; margin:0.25rem 1rem 0 0; }
+    #registration:has(#role-candidate:checked) [data-role="Employer"],
+    #registration:has(#role-employer:checked) [data-role="Candidate"] { display:none; }
+    .field-help { margin:0.35rem 0; font-size:0.9rem; }
+    .delete-job { display:inline-block; vertical-align:top; }
+    .delete-job:not([open]) .when-open, .delete-job[open] .when-closed { display:none; }
   </style>
 </head>
 <body>

@@ -4,7 +4,7 @@
 <h1>{{ 'Edit job posting' if job else 'Create a job posting' }}</h1>
 <div class="card">
   {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
-  <form method="post">
+  <form method="post" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="title">Title</label>
     <input id="title" name="title" type="text" value="{{ request.form.get('title', job.title if job else '') }}" required>

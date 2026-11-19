@@ -70,7 +70,11 @@ changes on its application and keeps the slot unavailable (FP-SCHED-2).
 
 **Authentication (FP-AUTH-1, FP-AUTH-2).** Registration creates a user with
 email (unique identifier, stored lowercased), password, and one of the two
-roles. Passwords are stored with `werkzeug.security.generate_password_hash`
+roles. The registration form asks candidates for a display name and employers
+for a company name. New passwords require at least eight printable ASCII
+characters (space through tilde), including at least one non-space character.
+Leading, internal and trailing spaces are preserved. Login verifies existing
+credentials as originally stored. Passwords are stored with `werkzeug.security.generate_password_hash`
 (salted scrypt/PBKDF2 — an established password-hashing function). Verification
 uses `check_password_hash`; unknown email and wrong password are
 indistinguishable (`401 Invalid email or password`). Password hashes are never

@@ -1,5 +1,6 @@
 """Account registration, authentication, and role checks (FP-AUTH-1..3)."""
 
+import re
 import sqlite3
 
 from app.db import get_db, transaction, translate_integrity_error
@@ -9,12 +10,18 @@ from app.timeutils import utc_now_iso
 
 ROLES = ("Candidate", "Employer")
 MIN_PASSWORD_LEN = 8
+NEW_PASSWORD_PATTERN = r"(?=.*[!-~])[ -~]+"
+PASSWORD_CHARACTERS = "Use only English letters, digits, spaces, and keyboard punctuation. Include at least one non-space character."
 DUPLICATE_EMAIL = "Email already registered"
+
+# The single-address syntax used by HTML email inputs (including single-label domains).
+_DOMAIN_LABEL = r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+_EMAIL = re.compile(r"[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@" + _DOMAIN_LABEL + r"(?:\." + _DOMAIN_LABEL + r")*")
 
 
 def _validate_email(email: str) -> str:
     email = (email or "").strip()
-    if "@" not in email or email.startswith("@") or email.endswith("@") or " " in email:
+    if not _EMAIL.fullmatch(email):
         raise ValidationError("Enter a valid email address")
     return email.lower()
 
@@ -32,6 +39,10 @@ def register_user(email: str, password: str, role: str, display_name: str = "", 
         raise ValidationError("Role must be Candidate or Employer")
     if not password or len(password) < MIN_PASSWORD_LEN:
         raise ValidationError(f"Password must be at least {MIN_PASSWORD_LEN} characters")
+    if not password.strip(" "):
+        raise ValidationError("A password cannot contain only spaces.")
+    if not re.fullmatch(NEW_PASSWORD_PATTERN, password):
+        raise ValidationError(PASSWORD_CHARACTERS)
     if role == "Candidate" and not (display_name or "").strip():
         raise ValidationError("Display name is required for candidates")
     if role == "Employer" and not (company_name or "").strip():

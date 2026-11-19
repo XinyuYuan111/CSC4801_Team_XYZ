@@ -3,22 +3,30 @@
 {% block content %}
 <h1>Create an account</h1>
 <div class="card">
-  {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
-  <form method="post">
+  {% if error %}<p class="error-text" role="alert">{{ error }}</p>{% endif %}
+  <form id="registration" method="post" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="role">I am a</label>
-    <select id="role" name="role" required>
-      <option value="Candidate">Candidate</option>
-      <option value="Employer">Employer</option>
-    </select>
+    {% set employer = request.form.get('role') == 'Employer' %}
+    <fieldset class="account-type">
+      <legend>Account type</legend>
+      <label for="role-candidate"><input id="role-candidate" type="radio" name="role" value="Candidate"{% if not employer %} checked{% endif %}> Candidate</label>
+      <label for="role-employer"><input id="role-employer" type="radio" name="role" value="Employer"{% if employer %} checked{% endif %}> Employer</label>
+    </fieldset>
+    <div data-role="Candidate">
+      <label for="display_name">Display name</label>
+      <input id="display_name" name="display_name" type="text" autocomplete="nickname" value="{{ request.form.get('display_name', '') }}" required>
+    </div>
+    <div data-role="Employer">
+      <label for="company_name">Company name</label>
+      <input id="company_name" name="company_name" type="text" autocomplete="organization" value="{{ request.form.get('company_name', '') }}" required>
+    </div>
     <label for="email">Email</label>
-    <input id="email" name="email" type="email" required>
-    <label for="password">Password (at least 8 characters)</label>
-    <input id="password" name="password" type="password" minlength="8" required>
-    <label for="display_name">Display name (candidates)</label>
-    <input id="display_name" name="display_name" type="text">
-    <label for="company_name">Company name (employers)</label>
-    <input id="company_name" name="company_name" type="text">
+    <input id="email" name="email" type="email" autocomplete="username" value="{{ request.form.get('email', '') }}" required>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="new-password" lang="en"
+           autocapitalize="none" spellcheck="false" minlength="{{ min_password_len }}" pattern="{{ password_pattern }}"
+           aria-describedby="password-help" data-pattern-error="{{ password_characters }}" required>
+    <p class="muted field-help" id="password-help">At least {{ min_password_len }} characters. {{ password_characters }}</p>
     <div class="actions">
       <button class="btn" type="submit">Register</button>
       <a class="btn secondary" href="{{ url_for('auth.login') }}">Back to log in</a>

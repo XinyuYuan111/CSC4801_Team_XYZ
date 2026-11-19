@@ -4,7 +4,7 @@
 <h1>Company profile</h1>
 <div class="card">
   {% if error %}<p class="error-text">{{ error }}</p>{% endif %}
-  <form method="post">
+  <form method="post" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="company_name">Company name</label>
     <input id="company_name" name="company_name" type="text" value="{{ company.company_name }}" required>

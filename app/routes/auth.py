@@ -33,6 +33,8 @@ def home():
 def register():
     if current_user() is not None:
         return redirect(url_for("auth.home"))
+    error = None
+    status = 200
     if request.method == "POST":
         role = request.form.get("role", "")
         try:
@@ -44,13 +46,18 @@ def register():
                 company_name=request.form.get("company_name", ""),
             )
         except AppError as exc:
-            return render_template("auth/register.html", error=exc.message), exc.status
-        _start_session(user_id)
-        flash("Account created. You are now logged in.", "success")
-        if role == "Employer":
-            return redirect(url_for("employer.jobs"))
-        return redirect(url_for("candidate.dashboard"))
-    return render_template("auth/register.html", error=None)
+            error, status = exc.message, exc.status
+        else:
+            _start_session(user_id)
+            flash("Account created. You are now logged in.", "success")
+            if role == "Employer":
+                return redirect(url_for("employer.jobs"))
+            return redirect(url_for("candidate.dashboard"))
+    return render_template(
+        "auth/register.html", error=error, min_password_len=auth_service.MIN_PASSWORD_LEN,
+        password_pattern=auth_service.NEW_PASSWORD_PATTERN,
+        password_characters=auth_service.PASSWORD_CHARACTERS,
+    ), status
 
 
 @bp.route("/login", methods=("GET", "POST"))

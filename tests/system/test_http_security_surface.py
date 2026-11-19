@@ -61,9 +61,11 @@ def test_xss_payloads_are_escaped_in_every_user_controlled_field(app):
 
 def test_sql_metacharacters_are_data_not_code(app, db):
     cand = Browser(app)
-    # Apostrophes / SQL metacharacters in identifiers must be stored as-is.
-    assert cand.register(f"o{SQLI}@sql.test".replace(" ", "")[:40], "Password123!", "Candidate",
+    # An apostrophe is valid in an email local part and must survive storage.
+    email = "o'neil+qa@sql.test"
+    assert cand.register(email, "Password123!", "Candidate",
                          display_name=SQLI).status_code == 302
+    assert db.execute("SELECT email FROM users").fetchone()["email"] == email
     # The DB still has its tables and the hostile name is a plain value.
     names = [
         r["display_name"]
