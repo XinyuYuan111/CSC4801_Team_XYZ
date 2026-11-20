@@ -16,27 +16,29 @@
       <option value="{{ job.id }}">{{ job.title }}</option>
       {% endfor %}
     </select>
-    <div id="slot-start-fallback">
-      <label for="start_utc">Start time (UTC, 30-minute slot)</label>
-      <input id="start_utc" name="start_utc" type="datetime-local" min="{{ min_start }}" required>
-    </div>
-    <fieldset id="slot-picker" class="slot-picker" data-now-ms="{{ now_ms }}" hidden disabled>
+    <fieldset id="slot-picker" class="slot-picker" data-now-ms="{{ now_ms }}">
       <legend>Start time (UTC)</legend>
       <div class="slot-parts">
         <div>
           <label for="slot-date">Date</label>
-          <input id="slot-date" type="date" min="{{ min_start[:10] }}" required>
+          <div class="slot-date-entry">
+            <input id="slot-date" name="slot_date" type="text" placeholder="yyyy/mm/dd" required>
+            <span class="slot-calendar" hidden>
+              <span aria-hidden="true">Calendar</span>
+              <input id="slot-calendar" type="date" min="{{ first_date }}" aria-label="Choose date from calendar">
+            </span>
+          </div>
         </div>
         <div>
           <label for="slot-hour">Hour</label>
-          <select id="slot-hour" required>
+          <select id="slot-hour" name="slot_hour" required>
             <option value="">Hour</option>
             {% for hour in range(24) %}<option>{{ '%02d' | format(hour) }}</option>{% endfor %}
           </select>
         </div>
         <div>
           <label for="slot-minute">Minute</label>
-          <select id="slot-minute" required>
+          <select id="slot-minute" name="slot_minute" required>
             <option value="">Minute</option>
             {% for minute in range(60) %}<option>{{ '%02d' | format(minute) }}</option>{% endfor %}
           </select>

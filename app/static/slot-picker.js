@@ -1,9 +1,9 @@
 (() => {
   const picker = document.getElementById("slot-picker");
-  const date = document.getElementById("slot-date");
+  const dateText = document.getElementById("slot-date");
+  const calendar = document.getElementById("slot-calendar");
   const hour = document.getElementById("slot-hour");
   const minute = document.getElementById("slot-minute");
-  const start = document.getElementById("start_utc");
   const clockOffset = Number(picker.dataset.nowMs) - Date.now();
   const serverTime = () => Date.now() + clockOffset;
 
@@ -18,23 +18,39 @@
     // The service requires strict futurity and the form accepts whole UTC minutes.
     const next = new Date(serverTime() + 60000).toISOString();
     const firstDate = next.slice(0, 10);
-    date.min = firstDate;
-    const isFirstDate = date.value === firstDate;
-    hour.disabled = !date.value || !date.validity.valid;
+    calendar.min = firstDate;
+    const iso = /^\d{4}\/\d{2}\/\d{2}$/.test(dateText.value) ? dateText.value.replaceAll("/", "-") : "";
+    if (calendar.value !== iso) calendar.value = iso;
+    const day = calendar.value; // The native date control clears impossible dates such as February 30.
+    let dateError = "";
+    if (dateText.value && !day) dateError = "Enter a valid date in yyyy/mm/dd format.";
+    else if (calendar.validity.rangeUnderflow) dateError = "Choose a future start time (UTC).";
+    dateText.setCustomValidity(dateError);
+    const isFirstDate = day === firstDate;
+    hour.disabled = !day || !dateText.validity.valid;
     limitOptions(hour, isFirstDate ? next.slice(11, 13) : "00");
     minute.disabled = hour.disabled || !hour.value;
     limitOptions(minute, isFirstDate && hour.value === next.slice(11, 13) ? next.slice(14, 16) : "00");
-    start.value = !minute.disabled && minute.value ? `${date.value}T${hour.value}:${minute.value}` : "";
   }
 
-  document.getElementById("slot-start-fallback").hidden = true;
-  start.type = "hidden";
-  picker.disabled = false;
-  picker.hidden = false;
+  function useCalendarDate() {
+    dateText.value = calendar.value.replaceAll("-", "/");
+    dateText.dispatchEvent(new Event("input", {bubbles:true}));
+  }
+  calendar.addEventListener("input", useCalendarDate);
+  calendar.addEventListener("change", useCalendarDate);
+  calendar.addEventListener("keydown", event => {
+    if ((event.key === "Enter" || event.key === " ") && calendar.showPicker) {
+      event.preventDefault();
+      calendar.showPicker();
+    }
+  });
+
+  calendar.parentElement.hidden = false;
   for (const event of ["input", "change", "focusin", "pointerdown"]) {
     picker.addEventListener(event, refresh);
   }
-  start.form.addEventListener("submit", refresh, {capture: true});
+  dateText.form.addEventListener("submit", refresh, {capture: true});
   window.addEventListener("pageshow", refresh);
   document.addEventListener("visibilitychange", refresh);
   function tick() {

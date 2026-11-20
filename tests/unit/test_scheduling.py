@@ -23,9 +23,28 @@ def test_slot_picker_starts_at_next_utc_minute(client, monkeypatch, clock, first
     client.register("owner@time.test", "Password123!", "Employer", company_name="Example")
     for response in (client.get("/employer/slots"), client.post("/employer/slots", {})):
         html = response.get_data(as_text=True)
-        assert f'type="datetime-local" min="{first_start}"' in html
-        assert f'type="date" min="{first_start[:10]}"' in html
+        assert 'type="datetime-local"' not in html
+        assert 'name="slot_date" type="text" placeholder="yyyy/mm/dd"' in html
+        assert f'id="slot-calendar" type="date" min="{first_start[:10]}"' in html
         assert f'data-now-ms="{int(now.timestamp() * 1000)}"' in html
+
+
+def test_slot_date_form_uses_displayed_format_and_utc(client, app, world):
+    ids = world()
+    client.login("ana@test.local", "Password123!")
+    form = {"job_id": ids["jobs"]["backend"], "slot_hour": "23", "slot_minute": "45"}
+    for date in ("", "2096-02-29", "2096/2/29", "2095/02/29"):
+        response = client.post("/employer/slots", {**form, "slot_date": date})
+        assert response.status_code == 400
+        assert "Enter a valid date in yyyy/mm/dd format" in response.get_data(as_text=True)
+    past = client.post("/employer/slots", {**form, "slot_date": "2000/01/01"})
+    assert past.status_code == 400
+    assert "Slots must be in the future" in past.get_data(as_text=True)
+    assert client.post("/employer/slots", {**form, "slot_date": "2096/02/29"}).status_code == 302
+    with app.app_context():
+        slot, = scheduling_service.list_slots_for_employer(ids["users"]["ana"])
+        assert slot["start_utc"] == "2096-02-29T23:45:00Z"
+        assert slot["end_utc"] == "2096-03-01T00:15:00Z"
 
 
 def test_fp_sched_2_shared_employer_availability(app, world):

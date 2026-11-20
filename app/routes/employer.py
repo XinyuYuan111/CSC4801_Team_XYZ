@@ -1,6 +1,7 @@
 """Employer-facing routes: company, jobs, applicants, slots (FP-EMP-1..3, FP-SCHED-1)."""
 
-from datetime import timedelta
+import re
+from datetime import datetime, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
@@ -10,7 +11,7 @@ from app.services import applications as applications_service
 from app.services import jobs as jobs_service
 from app.services import profiles as profiles_service
 from app.services import scheduling as scheduling_service
-from app.timeutils import parse_iso, plus_minutes, to_iso, utc_now
+from app.timeutils import UTC, parse_iso, plus_minutes, to_iso, utc_now
 
 bp = Blueprint("employer", __name__)
 
@@ -135,20 +136,35 @@ def _render_slots(error=None):
     return render_template(
         "employer/slots.html", slots=rows, jobs=owned_jobs, error=error,
         now_ms=int(now.timestamp() * 1000),
-        min_start=(now + timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M"),
+        first_date=(now + timedelta(minutes=1)).date().isoformat(),
     )
+
+
+def _submitted_slot_start():
+    if "slot_date" not in request.form:
+        return parse_iso(request.form.get("start_utc", ""))
+    date = request.form["slot_date"]
+    hour = request.form.get("slot_hour", "")
+    minute = request.form.get("slot_minute", "")
+    value = f"{date} {hour}:{minute}"
+    message = "Enter a valid date in yyyy/mm/dd format and select an hour and minute (UTC)."
+    if not re.fullmatch(r"[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}", value):
+        raise ValidationError(message)
+    try:
+        return datetime.strptime(value, "%Y/%m/%d %H:%M").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise ValidationError(message) from exc
 
 
 @bp.route("/employer/slots", methods=("POST",))
 @role_required("Employer")
 def create_slot():
-    start_raw = request.form.get("start_utc", "").strip()
     job_id = request.form.get("job_id", type=int)
     try:
         if job_id is None:
             raise ValidationError("Select a job for this slot")
         # The form collects a start time only; the end is always start + 30 minutes.
-        start = parse_iso(start_raw)
+        start = _submitted_slot_start()
         end_iso = plus_minutes(to_iso(start), 30)
         scheduling_service.create_slot(current_user_id(), job_id, to_iso(start), end_iso)
     except (ValidationError, ValueError, OverflowError) as exc:
